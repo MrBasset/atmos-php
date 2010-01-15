@@ -1016,11 +1016,11 @@ class EsuRestApi implements EsuApi {
             
         $sb = "GET\n";
         $sb .= strtolower( $resource ) . "\n";
-        $sb .= $uidEnc . "\n";
+        $sb .= $this->uid . "\n";
         $sb .= $expiration;
             
         $signature = $this->sign( $sb );
-        $resource .= "?uid=" . $this->uid . "&expires=" . $expiration .
+        $resource .= "?uid=" . $uidEnc . "&expires=" . $expiration .
                 "&signature=" . urlencode( $signature );
             
         $url = $this->proto . "://" . $this->host . ":" . $this->port . 
