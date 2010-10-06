@@ -26,8 +26,9 @@
  
 require_once 'EsuInterface.php';
 require_once 'EsuObjects.php';
-require_once 'HTTP/Request.php';
 require_once 'PEAR.php';
+require_once "Net/URL2.php";
+require_once "HTTP/Request2.php";
 
 /**
  * Implements the REST version of the ESU API.  This class uses the HTTP_Request
@@ -81,16 +82,20 @@ class EsuRestApi implements EsuApi {
 	 * @param string $mimeType the MIME type of the content.  Optional, 
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
+	 * @param Checksum $checksum if not null, use the Checksum object to compute
+     * the checksum for the create object request.  If appending
+     * to the object with subsequent requests, use the same
+     * checksum object for each request.
 	 * @return ObjectId Identifier of the newly created object.
 	 * @throws EsuException if the request fails.
 	 */
 	public function createObject( $acl = NULL, $metadata = NULL, $data = NULL, 
-		$mimeType = NULL ) {
+		$mimeType = NULL, $checksum = NULL ) {
 
 		// Create the request
 		$resource = $this->context . "/objects";
-		$req = $this->buildRequest( $resource );
-		
+		$req = $this->buildRequest( $resource, null );
+		$response = null;
 		
 		// build the headers
 		$headers = array();
@@ -121,28 +126,32 @@ class EsuRestApi implements EsuApi {
 			$req->setBody( "" );
 		}
 		
+		// Process checksum
+		if( $checksum != null ) {
+			if( $data != null ) {
+				$checksum->update( $data );
+			} 
+			$headers["x-emc-wschecksum"] = "".$checksum;
+		}
+		
 		// Add date
 		$headers["Date"] = gmdate( 'r' );
 		
 		// Sign request
 		$this->signRequest( $req, "POST", $resource, $headers, $data );
 		
-		$result = $req->sendRequest( true );
-		//$this->trace( "Response: " . $req->getResponseCode() . " Result: " . $result );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				$this->trace( "Message: " . $result->getMessage() . " Code: " . $result->getCode() );
-				
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+				
 		// The new object ID is returned in the location response header
-		$location = $req->getResponseHeader( "location" );
+		$location = $response->getHeader( "location" );
 		$pos = array();
 		// Parse the value out of the URL
 		ereg( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
@@ -165,15 +174,19 @@ class EsuRestApi implements EsuApi {
 	 * @param string $mimeType the MIME type of the content.  Optional, 
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
+	 * @param Checksum $checksum if not null, use the Checksum object to compute
+     * the checksum for the create object request.  If appending
+     * to the object with subsequent requests, use the same
+     * checksum object for each request.
 	 * @return ObjectId The ObjectId of the newly created object
 	 * @throws EsuException if the request fails.
 	 */
 	public function createObjectOnPath( $path, $acl = null, $metadata = null, 
-		$data = null, $mimeType = null ) {
+		$data = null, $mimeType = null, $checksum = null ) {
 			
 		// Create the request
 		$resource = $this->getResourcePath( $this->context, $path );
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		
 		
 		// build the headers
@@ -205,25 +218,33 @@ class EsuRestApi implements EsuApi {
 			$req->setBody( "" );
 		}
 		
+		// Process checksum
+		if( $checksum != null ) {
+			if( $data != null ) {
+				$checksum->update( $data );
+			} 
+			$headers["x-emc-wschecksum"] = "".$checksum;
+		}
+		
 		// Add date
 		$headers["Date"] = gmdate( 'r' );
 		
 		// Sign request
 		$this->signRequest( $req, "POST", $resource, $headers, $data );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
+	
 		// The new object ID is returned in the location response header
-		$location = $req->getResponseHeader( "location" );
+		$location = $response->getHeader( "location" );
 		$pos = array();
 		// Parse the value out of the URL
 		ereg( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
@@ -241,7 +262,7 @@ class EsuRestApi implements EsuApi {
 	 */
 	public function deleteObject( $id ) {
 		$resource = $this->getResourcePath( $this->context, $id );
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -249,16 +270,16 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "DELETE", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
+		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		
 	}
 	
@@ -271,8 +292,8 @@ class EsuRestApi implements EsuApi {
 	 * @return MetadataList The list of metadata for the object.
 	 */
 	public function getUserMetadata( $id, $tags = null ) {
-		$resource = $this->getResourcePath( $this->context, $id ) . "?metadata/user";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "metadata/user" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -286,22 +307,21 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+	
 		// Parse return headers.  Regular metadata is in x-emc-meta and
 		// listable metadata is in x-emc-listable-meta
 		$meta = new MetadataList();
-		$this->readMetadata( $meta, $req->getResponseHeader( "x-emc-meta" ), false );		
-		$this->readMetadata( $meta, $req->getResponseHeader( "x-emc-listable-meta" ), true );
+		$this->readMetadata( $meta, $response->getHeader( "x-emc-meta" ), false );		
+		$this->readMetadata( $meta, $response->getHeader( "x-emc-listable-meta" ), true );
 		
 		return $meta;
 	}
@@ -311,11 +331,16 @@ class EsuRestApi implements EsuApi {
 	 * @param Identifier $id the identifier of the object whose content to read.
 	 * @param Extent $extent the portion of the object data to read.  Optional.
 	 * Default is null to read the entire object.
+	 * @param Checksum $checksum if not null, the given checksum object will be used
+     * to verify checksums during the read operation.  Note that only erasure coded objects 
+     * will return checksums *and* if you're reading the object in chunks, you'll have to 
+     * read the data back sequentially to keep the checksum consistent.  If the read operation 
+     * does not return a checksum from the server, the checksum operation will be skipped.
 	 * @return string the object data read.
 	 */
-	public function readObject( $id, $extent = null ) {
+	public function readObject( $id, $extent = null, $checksum = null ) {
 		$resource = $this->getResourcePath( $this->context, $id );
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -333,19 +358,25 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
-				
+		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+			
 		// The requested content is in the response body.
-		return $req->getResponseBody();
+		$body = &$response->getBody();
+		if( $checksum ) {
+			// Update checksum
+			$checksum->setExpectedValue( $response->getHeader( "x-emc-wschecksum" ) );
+			$checksum->update( $body );
+		}
+		
+		return $body;
 	}
 	
 	/**
@@ -354,8 +385,8 @@ class EsuRestApi implements EsuApi {
 	 * @return Acl the object's ACL
 	 */
 	public function getAcl( $id ) {
-		$resource = $this->getResourcePath( $this->context, $id ) . "?acl";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "acl" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -364,22 +395,21 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Parse return headers.  User grants are in x-emc-useracl and
 		// group grants are in x-emc-groupacl
 		$acl = new Acl();
-		$this->readAcl( $acl, $req->getResponseHeader( "x-emc-useracl" ), Grantee::USER );		
-		$this->readAcl( $acl, $req->getResponseHeader( "x-emc-groupacl" ), Grantee::GROUP );
+		$this->readAcl( $acl, $response->getHeader( "x-emc-useracl" ), Grantee::USER );		
+		$this->readAcl( $acl, $response->getHeader( "x-emc-groupacl" ), Grantee::GROUP );
 		
 		return $acl;
 		
@@ -392,8 +422,8 @@ class EsuRestApi implements EsuApi {
 	 * @param MetadataTags $tags the list of metadata tags to delete.
 	 */
 	public function deleteUserMetadata( $id, $tags ) {
-		$resource = $this->getResourcePath( $this->context, $id ) . "?metadata/user";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "metadata/user" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -409,16 +439,16 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "DELETE", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
+		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 	}
 	
 	/**
@@ -430,8 +460,8 @@ class EsuRestApi implements EsuApi {
 	public function listVersions( $id ) {
 		$versions = array();
 		
-		$resource = $this->getResourcePath( $this->context, $id ) . "?versions";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "versions" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -440,20 +470,19 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+	
 		// Parse the returned objects.  They are passed in the response
 		// body in an XML format.
-		$this->parseObjectList( $req->getResponseBody(), $versions );
+		$this->parseVersionList( $response->getBody(), $versions );
 		
 		return $versions;
 	}
@@ -464,8 +493,8 @@ class EsuRestApi implements EsuApi {
 	 * @return ObjectId the id of the newly created version
 	 */
 	public function versionObject( $id ) {
-		$resource = $this->getResourcePath( $this->context, $id ) . '?versions';
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "versions" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -474,25 +503,57 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "POST", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Get the ID of the new version out of the location header.
-		$location = $req->getResponseHeader( "location" );
+		$location = $response->getHeader( "location" );
 		$pos = array();
 		ereg( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
 		$this->trace( "Location: " . $location );
 		
 		return new ObjectId( $pos[1] );
 	}
+	
+	/**
+	 * Restores content from a version to the base object (i.e. "promote" an 
+     * old version to the current version)
+	 * @param ObjectId $id Base object ID (target of the restore)
+	 * @param ObjectId $vId Version object ID to restore
+	 */
+	public function restoreVersion( $id, $vId ) {
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "versions" );
+		$headers = array();
+		$headers["x-emc-uid"] = $this->uid;
+		
+		// Add date
+		$headers["Date"] = gmdate( 'r' );
+		
+		// Add ID of version to promote
+		$headers["x-emc-version-oid"] = $vId;
+		
+		// Sign request
+		$this->signRequest( $req, "PUT", $resource, $headers, null );
+		
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
+		}
+		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}		
+	}
+	
 	
 	/**
 	 * Fetches the system metadata for the object.
@@ -503,8 +564,8 @@ class EsuRestApi implements EsuApi {
 	 * @return MetadataList The list of system metadata for the object.
 	 */
 	public function getSystemMetadata( $id, $tags = null ) {
-		$resource = $this->getResourcePath( $this->context, $id ) . "?metadata/system";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "metadata/system" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -518,21 +579,20 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Parse return headers
 		$meta = new MetadataList();
-		$this->readMetadata( $meta, $req->getResponseHeader( "x-emc-meta" ), false );		
-		$this->readMetadata( $meta, $req->getResponseHeader( "x-emc-listable-meta" ), true );
+		$this->readMetadata( $meta, $response->getHeader( "x-emc-meta" ), false );		
+		$this->readMetadata( $meta, $response->getHeader( "x-emc-listable-meta" ), true );
 		
 		return $meta;
 		
@@ -553,7 +613,7 @@ class EsuRestApi implements EsuApi {
 		
 		// Create request
 		$resource = $this->context . "/objects";
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -569,21 +629,20 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Get the list of objects.  They are passed in the response body
 		// in an XML format.
 		$objects = array();
-		$this->parseObjectList( $req->getResponseBody(), $objects );
+		$this->parseObjectList( $response->getBody(), $objects );
 		return $objects;
 		
 	}
@@ -603,7 +662,7 @@ class EsuRestApi implements EsuApi {
 		
 		// Create request
 		$resource = $this->context . "/objects";
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 
@@ -623,21 +682,20 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Get the list of objects.  They are passed in the response body
 		// in an XML format.
 		$objects = array();
-		$this->parseObjectListWithMetadata( $req->getResponseBody(), $objects );
+		$this->parseObjectListWithMetadata( $response->getBody(), $objects );
 		return $objects;
 	}
 	
@@ -656,8 +714,8 @@ class EsuRestApi implements EsuApi {
 		}
 		
 		// Create request
-		$resource = $this->context . "/objects?listabletags";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->context . "/objects";
+		$req = $this->buildRequest( $resource, "listabletags" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -671,21 +729,20 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Get the listable tags out of the x-emc-listable-tags response header
-		$this->trace( "listable tags: " . $req->getResponseHeader( "x-emc-listable-tags" ) );
+		$this->trace( "listable tags: " . $response->getHeader( "x-emc-listable-tags" ) );
 		$tags = new MetadataTags();
-		$this->readTags( $tags, $req->getResponseHeader( "x-emc-listable-tags" ), true );
+		$this->readTags( $tags, $response->getHeader( "x-emc-listable-tags" ), true );
 		return $tags;
 	}
 
@@ -696,8 +753,8 @@ class EsuRestApi implements EsuApi {
 	 */
 	public function listUserMetadataTags( $id ) {
 		// Create request
-		$resource = $this->getResourcePath( $this->context, $id ) . "?metadata/tags";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "metadata/tags" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -706,24 +763,23 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Get the user metadata tags out of x-emc-listable-tags and
 		// x-emc-tags
-		$this->trace( "listable tags: " . $req->getResponseHeader( "x-emc-listable-tags" ) );
-		$this->trace( "tags: " . $req->getResponseHeader( "x-emc-tags" ) );
+		$this->trace( "listable tags: " . $response->getHeader( "x-emc-listable-tags" ) );
+		$this->trace( "tags: " . $response->getHeader( "x-emc-tags" ) );
 		$tags = new MetadataTags();
-		$this->readTags( $tags, $req->getResponseHeader( "x-emc-listable-tags" ), true );
-		$this->readTags( $tags, $req->getResponseHeader( "x-emc-tags" ), false );
+		$this->readTags( $tags, $response->getHeader( "x-emc-listable-tags" ), true );
+		$this->readTags( $tags, $response->getHeader( "x-emc-tags" ), false );
 		return $tags;
 	}
 
@@ -736,7 +792,7 @@ class EsuRestApi implements EsuApi {
 	public function queryObjects( $xquery ) {
 		// Create request
 		$resource = $this->context . "/objects";
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -752,21 +808,20 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "GET", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Get the list of objects in the search result.  They are passed
 		// in the response body in an XML format.
 		$objects = array();
-		$this->parseObjectList( $req->getResponseBody(), $objects );
+		$this->parseObjectList( $response->getBody(), $objects );
 		return $objects;
 	}
 
@@ -786,13 +841,17 @@ class EsuRestApi implements EsuApi {
 	 * @param string $mimeType the MIME type of the content.  Optional, 
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
+	 * @param Checksum $checksum if not null, use the Checksum object to compute
+     * the checksum for the update object request.  If appending
+     * to the object with subsequent requests, use the same
+     * checksum object for each request.
 	 * @throws EsuException if the request fails.
 	 */
 	public function updateObject( $id, $acl = null, $metadata = null, 
-		$extent = null, $data = null, $mimeType = null ) {
+		$extent = null, $data = null, $mimeType = null, $checksum = null ) {
 			
 		$resource = $this->getResourcePath( $this->context, $id );
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		
 		$headers = array();
 		
@@ -836,23 +895,30 @@ class EsuRestApi implements EsuApi {
 			$req->setBody( "" );
 		}
 		
+		// Process checksum
+		if( $checksum != null ) {
+			if( $data != null ) {
+				$checksum->update( $data );
+			} 
+			$headers["x-emc-wschecksum"] = "".$checksum;
+		}
+		
 		// Add date
 		$headers["Date"] = gmdate( 'r' );
 		
 		// Sign request
 		$this->signRequest( $req, "PUT", $resource, $headers, $data );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 	}
 	
 	/**
@@ -863,8 +929,8 @@ class EsuRestApi implements EsuApi {
      * @param MetadataList $metadata metadata to write to the object.
      */
 	public function setUserMetadata( $id, $metadata ) {
-		$resource = $this->getResourcePath( $this->context, $id ) . "?metadata/user";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "metadata/user" );
 		
 		$headers = array();
 		
@@ -881,17 +947,16 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "POST", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 	}
 	
     /**
@@ -900,8 +965,8 @@ class EsuRestApi implements EsuApi {
      * @param Acl $acl the new ACL for the object.
      */
 	public function setAcl( $id, $acl ) {
-		$resource = $this->getResourcePath( $this->context, $id ) . "?acl";
-		$req = $this->buildRequest( $resource );
+		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "acl" );
 		
 		$headers = array();
 		
@@ -918,17 +983,16 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "POST", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 	}
 	
 	/**
@@ -1037,7 +1101,7 @@ class EsuRestApi implements EsuApi {
      */
     public function getAllMetadata( $id ) {
 		$resource = $this->getResourcePath( $this->context, $id );
-		$req = $this->buildRequest( $resource );
+		$req = $this->buildRequest( $resource, null );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
@@ -1046,28 +1110,27 @@ class EsuRestApi implements EsuApi {
 		// Sign request
 		$this->signRequest( $req, "HEAD", $resource, $headers, null );
 		
-		$result = $req->sendRequest( true );
-		if( $result !== true ) {
-			if( PEAR::isError( $result ) ) {
-				throw new EsuException( $result->getMessage(), $result->getCode() );
-			} else {
-				throw new EsuException( "Sending request failed: " . $result );
-			}
-		} else if( $req->getResponseCode() > 399 ) {
-			$this->handleError( $req );
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
 		// Parse return headers.  Regular metadata is in x-emc-meta and
 		// listable metadata is in x-emc-listable-meta
 		$meta = new MetadataList();
-		$this->readMetadata( $meta, $req->getResponseHeader( "x-emc-meta" ), false );		
-		$this->readMetadata( $meta, $req->getResponseHeader( "x-emc-listable-meta" ), true );
+		$this->readMetadata( $meta, $response->getHeader( "x-emc-meta" ), false );		
+		$this->readMetadata( $meta, $response->getHeader( "x-emc-listable-meta" ), true );
 		
 		// Parse return headers.  User grants are in x-emc-useracl and
 		// group grants are in x-emc-groupacl
 		$acl = new Acl();
-		$this->readAcl( $acl, $req->getResponseHeader( "x-emc-useracl" ), Grantee::USER );		
-		$this->readAcl( $acl, $req->getResponseHeader( "x-emc-groupacl" ), Grantee::GROUP );
+		$this->readAcl( $acl, $response->getHeader( "x-emc-useracl" ), Grantee::USER );		
+		$this->readAcl( $acl, $response->getHeader( "x-emc-groupacl" ), Grantee::GROUP );
 		
 		return array( $meta, $acl );
     }
@@ -1111,23 +1174,107 @@ class EsuRestApi implements EsuApi {
 		$this->timeout = $timeout;
 	}
 	
+	
+	/**
+     * Renames a file or directory within the namespace.
+     * @param ObjectPath $source The file or directory to rename
+     * @param ObjectPath $destination The new path for the file or directory
+     * @param ObjectPath $force If true, the desination file or 
+     * directory will be overwritten.  Directories must be empty to be 
+     * overwritten.  Also note that overwrite operations on files are
+     * not synchronous; a delay may be required before the object is
+     * available at its destination.
+     */
+    public function rename( $source, $destination, $force ) {
+    	$resource = $this->getResourcePath( $this->context, $source );
+		$req = $this->buildRequest( $resource, "rename" );
+		$headers = array();
+		$headers["x-emc-uid"] = $this->uid;
+		// Add date
+		$headers["Date"] = gmdate( 'r' );
+		
+		// Add the destination path
+        $destPath = "".$destination;
+        if ($destPath[0] == '/' ) {
+        	$destPath = substr( $destPath, 1 );
+        }
+        
+        $headers["x-emc-path"] = $destPath;
+
+        if ($force) {
+        	$headers["x-emc-force"] = "true";
+        }
+		
+		// Sign request
+		$this->signRequest( $req, "POST", $resource, $headers, null );
+		
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
+		}
+		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+    }
+	
+    /**
+     * Gets information about the web service.  Currently, this only includes
+     * the version of Atmos.
+     * @return ServiceInformation the service information object.
+     */
+    public function getServiceInformation() {
+		// Create request
+		$resource = $this->context . "/service";
+		$req = $this->buildRequest( $resource, null );
+		$headers = array();
+		$headers["x-emc-uid"] = $this->uid;
+		// Add date
+		$headers["Date"] = gmdate( 'r' );
+		
+		// Sign request
+		$this->signRequest( $req, "GET", $resource, $headers, null );
+		
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
+		}
+		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+
+		return $this->parseServiceInformation( $response->getBody() );
+    }
+    
+	
 	/////////////////////
 	// Private Methods //
 	/////////////////////
 	
 	
 	/**
-	 * Builds an HTTP_Request object
+	 * Creates an HTTP Request
+	 * @param string $resource the resource to access, e.g. /rest/namespace/file.txt
+	 * @param string $query query parameters, may be null, e.g. "versions"
 	 */
-	private function buildRequest( $type ) {
-		$url = $this->proto . "://" . $this->host . ":" . $this->port . 
-			$type;
+	private function buildRequest( $resource, $query ) {
+		$url = new Net_URL2( null );
+		$url->setScheme( $this->proto );
+		$url->setHost( $this->host );
+		$url->setPort( $this->port );
+		$url->setPath( $resource );
+		if( $query ) {
+			$url->setQuery( $query );
+		}
 		
 		$args = array();
 		if( $this->timeout ) {
 			$args["timeout"] = $this->timeout;			
 		}
-		$req = &new HTTP_Request( $url, $args );
+		$req = &new HTTP_Request2( $url, $args );
 		
 		return $req;
 	}
@@ -1190,7 +1337,11 @@ class EsuRestApi implements EsuApi {
 		
 		// Add the current date and the resource.
 		$hashStr .= $headers['Date'] . "\n";
-		$hashStr .= strtolower( $resource ) . "\n";
+		$fullResource = $req->getUrl()->getPath();
+		if( $req->getUrl()->getQuery() != null ) {
+			$fullResource .= "?" . $req->getUrl()->getQuery();
+		}
+		$hashStr .= strtolower( $fullResource ) . "\n";
 			
 		// Do the 'x-emc' headers.  The headers must be hashed in alphabetic
 		// order and the values must be stripped of whitespace and newlines.
@@ -1218,7 +1369,7 @@ class EsuRestApi implements EsuApi {
 				$first = false;
 			}
 			//$this->trace( "xheader: " . $k . "->" . $newheaders[$k] );
-			$hashStr .= $k . ':' . $newheaders[$k];
+			$hashStr .= $k . ':' . $this->normalizeSpace($newheaders[$k]);
 		}
 		
 		$this->trace( "Hashing: \n" . $hashStr );
@@ -1230,15 +1381,26 @@ class EsuRestApi implements EsuApi {
 		// Can set all the headers, etc now.
 		reset( $headers );
 		foreach( $headers as $key => $value ) { 
-			$req->addHeader( $key, $value );
+			$req->setHeader( $key, $value );
 			$this->trace( $key . "->" . $value );
 		}
 		
 		// Set the signature header
-		$req->addHeader( 'x-emc-signature', $hashOut );
+		$req->setHeader( 'x-emc-signature', $hashOut );
 		
 		// Set the method.
 		$req->setMethod( $method );
+	}
+	
+	private function normalizeSpace( $s ) {
+		$len = strlen( $s );
+		while( 1 ) {
+			$s = str_replace( "  ", " ", $s );
+			if( strlen( $s ) == $len ) {
+				return $s;
+			}
+			$len = strlen( $s );
+		}
 	}
 	
 	/**
@@ -1270,9 +1432,9 @@ class EsuRestApi implements EsuApi {
 	 * should contain an XML packet we can parse for the error code and message.
 	 * Otherwise, throw a generic error.
 	 */
-	private function handleError( $req ) {
-		$this->trace( "Response body: " . $req->getResponseBody() );
-		if( $req->getResponseBody() != null ) {
+	private function handleError( $response ) {
+		$this->trace( "Response body: " . $response->getBody() );
+		if( $response->getBody() != null ) {
 			// Note that this is the newer php5 DOM and not the older
 			// domxml extension.  If you're running XAMPP, you might have
 			// to disable the domxml extension in php.ini.
@@ -1280,12 +1442,12 @@ class EsuRestApi implements EsuApi {
 			$parseOk = false;
 			
 			try {
-				$parseOk = $dom->loadXML( $req->getResponseBody() );
+				$parseOk = $dom->loadXML( $response->getBody() );
 			} catch( Exception $e ) {
 				$this->trace( "Parse error message failed: " . $e );
 				// Can't parse body.  Throw HTTP code
-				throw new EsuException( 'Request failed: ' . $req->getResponseReason(), 
-					$req->getResponseCode() );
+				throw new EsuException( 'Request failed: ' . $response->getReasonPhrase(), 
+					$response->getStatus() );
 				
 			}
 			if( $parseOk === true ) {	
@@ -1298,8 +1460,8 @@ class EsuRestApi implements EsuApi {
 		}
 		
 		throw new EsuException( 'Request failed with error ' . 
-			$req->getResponseCode() . ': ' . $req->getResponseReason() . 
-			$req->getResponseBody(), $req->getResponseCode() );
+			$response->getStatus() . ': ' . $response->getReasonPhrase() . 
+			$response->getBody(), $response->getStatus() );
 		
 	}
 	
@@ -1456,6 +1618,30 @@ class EsuRestApi implements EsuApi {
 	}
 	
 	/**
+	 * Parses an XML list containing ObjectID elements.
+	 */
+	private function parseVersionList( $xml, &$objList ) {
+		$this->trace( "Response body: " . $xml );
+		if( $xml != null ) {
+			// Note that this is the newer php5 DOM and not the older
+			// domxml extension.  If you're running XAMPP, you might have
+			// to disable the domxml extension in php.ini.
+			$dom = new DOMDocument( );
+			if( $dom->loadXML( $xml ) === true ) {
+				// Just return all the ObjectID elements.
+				$objs = $dom->getElementsByTagName( "OID" );
+				$this->trace( "found " . $objs->length . " ids" );
+				for( $i=0; $i<$objs->length; $i++ ) {
+					$idstr = $objs->item($i)->nodeValue;
+					$this->trace( "found ID: " . $idstr );
+					$objList[] = new ObjectId( $idstr );
+				}
+			}
+		}
+		
+	}
+	
+	/**
 	 * Parses an XML list containing ObjectResult elements.
 	 */
 	private function parseObjectListWithMetadata( $xml, &$objList ) {
@@ -1575,6 +1761,29 @@ class EsuRestApi implements EsuApi {
 		}
 	}
 	
+	private function parseServiceInformation( $xml ) {
+		$this->trace( "Response body: " . $xml );
+		if( $xml != null ) {
+			// Note that this is the newer php5 DOM and not the older
+			// domxml extension.  If you're running XAMPP, you might have
+			// to disable the domxml extension in php.ini.
+			$dom = new DOMDocument( );
+			if( $dom->loadXML( $xml ) === true ) {
+				// Just return all the ObjectID elements.
+				$objs = $dom->getElementsByTagName( "Atmos" );
+				
+				$si = new ServiceInformation();
+				
+				$si->setAtmosVersion( $objs->item(0)->nodeValue );
+				
+				return $si;
+			} else {
+				throw new EsuException( "Could not parse XML" );
+			}
+		} else {
+			throw new EsuException( "Null data passed to parseServiceInformation" );
+		}
+	}
 	
 }
 ?>

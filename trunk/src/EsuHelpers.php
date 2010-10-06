@@ -75,6 +75,9 @@ class UploadHelper {
 	private $closeStream;
 	private $stream;
 	private $listener;
+	private $checksum;
+	private $computeChecksums;
+	private $mimeType;
 	
 	/**
 	 * Creates a new upload helper.
@@ -86,6 +89,8 @@ class UploadHelper {
 	public function __construct( $esuApi, $buffSize = UploadHelper::DEFAULT_BUFFSIZE ) {
 		$this->esu = $esuApi;
 		$this->buffSize = $buffSize;
+		$this->computeChecksums = false;
+		$this->mimeType = "application/octet-stream";
 	}
 	
 	/**
@@ -111,6 +116,29 @@ class UploadHelper {
 	}
 	
 	/**
+	 * Creates a new object on the server with the contents of the given file,
+	 * acl and metadata.
+	 * @param ObjectPath $path the path to create the file on
+	 * @param string $file the path to the file to upload
+	 * @param Acl $acl the ACL to assign to the new object.  Optional.  If not
+	 * specified, the server will generate a default ACL for the file.
+	 * @param MetadataList $metadata The metadata to assign to the new object.
+	 * Optional.  If null, no user metadata will be assigned to the new object.
+	 * @return ObjectId the identifier of the newly-created object.
+	 */
+	public function createObjectFromFileOnPath( $path, $file, $acl = null, $metadata = null ) {
+		$fd = fopen( $file, 'rb' );
+		if( $fd === false ) {
+			throw new EsuException( 'Could not open file ' . $file );
+		}
+		$b = filesize( $file );
+		if( $b > 0 ) { // PHP currently fails >2GB
+			$totalBytes = $b;
+		}
+		return $this->createObjectFromStreamOnPath( $path, $fd, $acl, $metadata, true );
+	}
+	
+	/**
 	 * Creates a new object on the server with the contents of the given stream,
 	 * acl and metadata.
 	 * @param resource $fd the stream to upload.  The stream will be read until
@@ -133,12 +161,74 @@ class UploadHelper {
 		$this->closeStream = $closeStream;
 		$this->stream = $fd;
 		
+		if( $this->computeChecksums ) {
+			$this->checksum = new Checksum( "SHA0" );	
+		}	
+			
 		$id = null;
 		
 		// First call should be to create object
 		try {
 			$data = $this->readChunk();
-			$id = $this->esu->createObject( $acl, $metadata, $data );
+			print "Creating object with initial chunk of " . strlen( $data ) . " bytes\n";
+			print "Checksum: $this->checksum\n";
+			
+			$id = $this->esu->createObject( $acl, $metadata, $data, $this->mimeType, $this->checksum );
+			if( $data != null ) {
+				$this->progress( strlen( $data ) );
+			} else {
+				// No data in file? Complete
+				$this->complete();
+				return $id;
+			}
+			
+			// Continue appending
+			$this->appendChunks( $id );
+		
+		} catch( EsuException $e ) {
+			print "Failure: $e\n";
+			$this->fail( $e );
+			return null;	
+		}
+		
+		return $id;
+	}
+	
+	/**
+	 * Creates a new object on the server with the contents of the given stream,
+	 * acl and metadata.
+	 * @param ObjectPath $path the path to create the resource on
+	 * @param resource $fd the stream to upload.  The stream will be read until
+	 * an EOF is encountered.
+	 * @param Acl $acl the ACL to assign to the new object.  Optional.  If not
+	 * specified, the server will generate a default ACL for the file.
+	 * @param MetadataList $metadata The metadata to assign to the new object.
+	 * Optional.  If null, no user metadata will be assigned to the new object.
+	 * @param boolean closeStream if true, the stream will be closed after
+	 * the transfer completes.  If false, the stream will not be closed.
+	 * @return ObjectId the identifier of the newly-created object.
+	 */
+	public function createObjectFromStreamOnPath( $path, $fd, $acl = null, $metadata = null, 
+		$closeStream = true ) {
+			
+		$this->currentBytes = 0;
+		$this->complete = false;
+		$this->failed = false;
+		$this->error = null;
+		$this->closeStream = $closeStream;
+		$this->stream = $fd;
+		
+		if( $this->computeChecksums ) {
+			$this->checksum = new Checksum( "SHA0" );	
+		}	
+			
+		$id = null;
+		
+		// First call should be to create object
+		try {
+			$data = $this->readChunk();
+			
+			$id = $this->esu->createObjectOnPath( $path, $acl, $metadata, $data, $this->mimeType, $this->checksum );
 			if( $data != null ) {
 				$this->progress( strlen( $data ) );
 			} else {
@@ -161,7 +251,7 @@ class UploadHelper {
 	/**
 	 * Updates an existing object with the contents of the given file, ACL, and
 	 * metadata.
-	 * @param ObjectId $id the identifier of the object to update.
+	 * @param Identifier $id the identifier of the object to update.
 	 * @param string $file the path to the file to replace the object's current
 	 * contents with
 	 * @param Acl $acl the ACL to update the object with.  Optional.  If not
@@ -180,7 +270,7 @@ class UploadHelper {
 	/**
 	 * Updates an existing object with the contents of the given stream, ACL, and
 	 * metadata.
-	 * @param ObjectId $id the identifier of the object to update.
+	 * @param Identifier $id the identifier of the object to update.
 	 * @param resource $fd the stream to replace the object's current
 	 * contents with.  The stream will be read until an EOF is encountered.
 	 * @param Acl $acl the ACL to update the object with.  Optional.  If not
@@ -198,10 +288,14 @@ class UploadHelper {
 		$this->closeStream = $closeStream;
 		$this->stream = $fd;
 		
+		if( $this->computeChecksums ) {
+			$this->checksum = new Checksum( "SHA0" );	
+		}	
+		
 		// The first call doesn't have extent so we truncate the remote file
 		try {
 			$data = $this->readChunk();
-			$this->esu->updateObject( $id, $acl, $metadata, null, $data );
+			$this->esu->updateObject( $id, $acl, $metadata, null, $data, $this->mimeType, $this->checksum );
 			if( $data != null ) {
 				$this->progress( strlen( $data ) );
 			} else {
@@ -275,6 +369,29 @@ class UploadHelper {
 		$this->listener = $listener;
 	}
 	
+	/**
+	 * If true, checksums will be used when creating/updating blocks.
+	 * @param boolean $value
+	 */
+	public function setComputeChecksums( $value ) {
+		$this->computeChecksums = $value;
+	}
+	
+	/**
+	 * Sets the mime type of the object being created/updated.
+	 * @param string $mime
+	 */
+	public function setMimeType( $mime ) {
+		$this->mimeType = $mime;
+	}
+	
+	/**
+	 * Returns the mimeType currently set.
+	 */
+	public function getMimeType() {
+		return $this->mimeType;
+	}
+	
 	/////////////////////
 	// Private methods //
 	/////////////////////
@@ -285,7 +402,8 @@ class UploadHelper {
 	private function appendChunks( $id ) {
 		while( ( $data = $this->readChunk() ) != null ) {
 			$extent = new Extent( $this->currentBytes, strlen( $data ) );
-			$this->esu->updateObject( $id, null, null, $extent, $data );
+			print "Extent: $extent\n";
+			$this->esu->updateObject( $id, null, null, $extent, $data, $this->mimeType, $this->checksum );
 			$this->progress( strlen( $data ) );
 		}
 		$this->complete();
@@ -374,6 +492,9 @@ class DownloadHelper {
 	private $closeStream;
 	private $stream;
 	private $listener;
+	private $checksum;
+	private $checksumming;
+	
 	
 	/**
 	 * Creates a new download helper.
@@ -415,6 +536,10 @@ class DownloadHelper {
 		$this->closeStream = $closeStream;
 		$this->stream = $stream;
 		
+		if( $this->checksumming ) {
+			$this->checksum = new Checksum( "SHA0" );
+		}
+		
 		// Get the file size.  Set to -1 if unknown.
 		$sMeta = $this->esu->getSystemMetadata( $id );
 		if( $sMeta->getMetadata( 'size' ) != null ) {
@@ -451,7 +576,7 @@ class DownloadHelper {
 				}
 				
 				// Read data from the server.
-				$data = $this->esu->readObject( $id, $extent );
+				$data = $this->esu->readObject( $id, $extent, $this->checksum );
 				
 				// Write to the stream
 				fwrite( $this->stream, $data );
@@ -461,6 +586,13 @@ class DownloadHelper {
 				
 				// See if we're done.
 				if( $this->currentBytes == $this->totalBytes ) {
+					if( $this->checksumming ) {
+						if( $this->checksum->getExpectedValue() != "".$this->checksum ) {
+							$this->fail( new EsuException( "Checksum failed, expected " . 
+								$this->checksum->getExpectedValue() . " but got $this->checksum" ) );
+						}
+					}
+					
 					$this->complete();
 					return;
 				}
@@ -522,6 +654,21 @@ class DownloadHelper {
 	 */
 	public function setListener( $listener ) {
 		$this->listener = $listener;
+	}
+	
+	/**
+	 * Sets checksum support for this download helper
+	 * @param boolean $check if true, checksumming will be enabled.
+	 */
+	public function setChecksumming( $check ) {
+		$this->checksumming = $check;
+	}
+	
+	/**
+	 * returns true if this download helper is checksumming
+	 */
+	public function isChecksumming() {
+		return $this->checksumming;
 	}
 	
 	

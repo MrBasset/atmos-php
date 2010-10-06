@@ -23,6 +23,8 @@
 //      CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
 //      ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
 //      POSSIBILITY OF SUCH DAMAGE.
+
+require_once 'SHA0.php';
  
 /**
  * Base ESU exception class that is thrown from the API methods.
@@ -303,6 +305,10 @@ class Extent {
 	 */
 	public function getOffset() {
 		return $this->offset;
+	}
+	
+	public function __toString() {
+		return "Extent: offset: $this->offset size: $this->size\n";
 	}
 }
 // Initialize the ALL_CONTENT instance
@@ -692,6 +698,111 @@ class ObjectResult {
 		$this->metadata = $metadata;
 	}
 	
+}
+
+class ServiceInformation {
+	private $atmosVersion;
+	
+	/**
+	 * Gets the version of Atmos
+	 */
+	public function getAtmosVersion() {
+		return $this->atmosVersion;
+	}
+	
+	/**
+	 * Sets the Atmos version
+	 * @param string $ver the version of Atmos.
+	 */
+	public function setAtmosVersion( $ver ) {
+		$this->atmosVersion = $ver;
+	}
+}
+
+
+class Checksum {
+	private $digest;
+	private $expected_value;
+	private $offset;
+	private $algorithm;
+	
+	public function __construct( $algorithm ) {
+		// For now, we only support SHA0
+		$this->digest = new SHA0();
+		$this->algorithm = "SHA0";
+		$this->offset = "0";
+	}
+	
+	public function getAlgorithmName() {
+		return $this->algorithm;
+	}
+	
+	/**
+	 * Updates the hash value and current offset.  Note that the user
+	 * generally doesn't call this function; it's called internally from
+	 * the create/update methods.
+	 * @param string $data a string of bytes to update with
+	 */
+	public function update( &$data ) {
+		$this->digest->hash_update( $data );
+		$this->offset = bcadd( $this->offset, strlen($data) );
+	}
+	
+	/**
+	 * Turns a byte array string into a hex string.
+	 * @param string $str
+	 */
+	function strhex( $str ) {
+		$out = "";
+		for($i=0; $i<strlen($str); $i++) {
+			$x = dechex(ord($str[$i]));
+			if( strlen($x) == 1 ){
+				$x = "0".$x;
+			}
+			$out .= $x;
+		}
+		return $out;
+	}
+	
+	
+	/**
+	 * Returns the checksum in a value suitable for inclusion in the 
+	 * x-emc-wschecksum method.
+	 */
+	public function __toString() {
+		$out = $this->algorithm."/".$this->offset."/".$this->getHashValue();
+		//print "" . gettype($out) . ": " + $out;
+		
+		return $out;
+	}
+	
+	/**
+	 * Gets the current value of the hash.  Clones the existing hash and performs
+	 * a final operation on it so the current partial hash is not finalized.
+	 */
+	private function getHashValue() {
+		$tmpdigest = clone $this->digest;
+		$tmpdigest->hash_final();
+		return $this->strhex( $tmpdigest->getValue() );
+	}
+	
+	/**
+	 * Gets the expected value of this hash.  Call this after a read
+	 * operation. Note that it is up
+	 * to the application to validate this value.
+	 * @return string the expected hash value in x-emc-wschecksum header format.
+	 */
+	public function getExpectedValue() {
+		return $this->expected_value;
+	}
+	
+	/**
+	 * Sets the expected value of this hash.
+	 * @param string $val
+	 */
+	public function setExpectedValue( $val ) {
+		$this->expected_value = $val;
+	}
 }
 
 ?>
