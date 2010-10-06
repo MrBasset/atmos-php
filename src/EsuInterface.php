@@ -39,11 +39,15 @@ interface EsuApi {
 	 * @param string $mimeType the MIME type of the content.  Optional, 
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
+	 * @param Checksum $checksum if not null, use the Checksum object to compute
+     * the checksum for the create object request.  If appending
+     * to the object with subsequent requests, use the same
+     * checksum object for each request.
 	 * @return ObjectId Identifier of the newly created object.
 	 * @throws EsuException if the request fails.
 	 */
 	public function createObject( $acl = null, $metadata = null, $data = null, 
-		$mimeType = null );
+		$mimeType = null, $checksum = null );
 		
 	/**
 	 * Creates a new object in the cloud.
@@ -56,15 +60,19 @@ interface EsuApi {
 	 * @param string $mimeType the MIME type of the content.  Optional, 
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
+	 * @param Checksum $checksum if not null, use the Checksum object to compute
+     * the checksum for the create object request.  If appending
+     * to the object with subsequent requests, use the same
+     * checksum object for each request.
 	 * @return ObjectId The ObjectId of the newly created object
 	 * @throws EsuException if the request fails.
 	 */
 	public function createObjectOnPath( $path, $acl = null, $metadata = null, 
-		$data = null, $mimeType = null );
+		$data = null, $mimeType = null, $checksum = null );
 	
 	/**
 	 * Updates an object in the cloud.
-	 * @param ObjectId $id The ID of the object to update
+	 * @param Identifier $id The ID of the object to update
 	 * @param Acl $acl Access control list for the new object. Optional, if
 	 * null, the ACL will not be modified.
 	 * @param MetadataList $metadata Metadata list for the new object.  
@@ -74,10 +82,14 @@ interface EsuApi {
 	 * @param string $mimeType the MIME type of the content.  Optional, 
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
+	 * @param Checksum $checksum if not null, use the Checksum object to compute
+     * the checksum for the update object request.  If appending
+     * to the object with subsequent requests, use the same
+     * checksum object for each request.
 	 * @throws EsuException if the request fails.
 	 */
 	public function updateObject( $id, $acl = null, $metadata = null, 
-		$extent = null, $data = null, $mimeType = null );
+		$extent = null, $data = null, $mimeType = null, $checksum = null );
 		
 	/**
 	 * Deletes an object from the cloud.
@@ -110,9 +122,14 @@ interface EsuApi {
 	 * @param ObjectId $id the identifier of the object whose content to read.
 	 * @param Extent $extent the portion of the object data to read.  Optional.
 	 * Default is null to read the entire object.
+	 * @param Checksum $checksum if not null, the given checksum object will be used
+     * to verify checksums during the read operation.  Note that only erasure coded objects 
+     * will return checksums *and* if you're reading the object in chunks, you'll have to 
+     * read the data back sequentially to keep the checksum consistent.  If the read operation 
+     * does not return a checksum from the server, the checksum operation will be skipped.
 	 * @return string the object data read.
 	 */
-	public function readObject( $id, $extent = null );
+	public function readObject( $id, $extent = null, $checksum = null );
 	
 	/**
 	 * Returns an object's ACL
@@ -159,6 +176,14 @@ interface EsuApi {
 	 * @return ObjectId the id of the newly created version
 	 */
 	public function versionObject( $id );
+	
+	/**
+	 * Restores content from a version to the base object (i.e. "promote" an 
+     * old version to the current version)
+	 * @param ObjectId $id Base object ID (target of the restore)
+	 * @param ObjectId $vId Version object ID to restore
+	 */
+	public function restoreVersion( $id, $vId );
 	
 	/**
 	 * Lists all objects with the given tag.
@@ -230,6 +255,23 @@ interface EsuApi {
      */
     public function getAllMetadata( $id );
     
-    
+    /**
+     * Renames a file or directory within the namespace.
+     * @param ObjectPath $source The file or directory to rename
+     * @param ObjectPath $destination The new path for the file or directory
+     * @param ObjectPath $force If true, the desination file or 
+     * directory will be overwritten.  Directories must be empty to be 
+     * overwritten.  Also note that overwrite operations on files are
+     * not synchronous; a delay may be required before the object is
+     * available at its destination.
+     */
+    public function rename( $source, $destination, $force );
+
+    /**
+     * Gets information about the web service.  Currently, this only includes
+     * the version of Atmos.
+     * @return ServiceInformation the service information object.
+     */
+    public function getServiceInformation();
 }
 ?>

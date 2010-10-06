@@ -26,7 +26,7 @@
 
 
 require_once 'EsuRestApi.php';
-require_once 'PHPUnit/Framework.php';
+//require_once 'PHPUnit/Framework.php';
 require_once 'EsuHelpers.php';
 
 /**
@@ -45,12 +45,12 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	/**
 	 * Shared secret for UID.  Change this value to your UID's shared secret
 	 */
-	private $secret = 'AI/KKl9FnZX0iKN/hd0sGJVLCsc=';
+	private $secret = 'D7qsp4j16PBHWSiUbc/bt3lbPBY=';
 	/**
 	 * Hostname or IP of ESU server.  Change this value to your server's
 	 * hostname or ip address.
 	 */
-	private $host = "192.168.1.110";
+	private $host = "192.168.15.115";
 	
 	/**
 	 * Port of ESU server (usually 80 or 443)
@@ -426,11 +426,35 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		
 		// List the versions and ensure their IDs are correct
 		$versions = $this->esu->listVersions( $id );
-		PHPUnit_Framework_Assert::assertEquals( 3, count( $versions ), 'Wrong number of versions returned' );
+		PHPUnit_Framework_Assert::assertEquals( 2, count( $versions ), 'Wrong number of versions returned' );
 		PHPUnit_Framework_Assert::assertTrue( array_search( $vid1, $versions ) !== false, 'version 1 not found in version list' );
 		PHPUnit_Framework_Assert::assertTrue( array_search( $vid2, $versions ) !== false, 'version 2 not found in version list' );
-		PHPUnit_Framework_Assert::assertTrue( array_search( $id, $versions ) !== false, 'base object not found in version list' );
+		PHPUnit_Framework_Assert::assertFalse( array_search( $id, $versions ) !== false, 'base object found in version list' );
 	}
+	
+	/**
+	 * Test restoring an older version to the base version
+	 */
+    public function testRestoreVersion() {
+        $id = $this->esu->createObject(null, null, "Base Version Content", "text/plain");
+        PHPUnit_Framework_Assert::assertNotNull($id, "null ID returned");
+        $this->cleanup[] = $id;
+
+        // Version the object
+        $vId = $this->esu->versionObject($id);
+
+        // Update the object content
+        $this->esu->updateObject($id, null, null, null, "Child Version Content -- You should never see me", "text/plain");
+
+        // Restore the original version
+        $this->esu->restoreVersion($id, $vId);
+
+        // Read back the content
+        $content = $this->esu->readObject($id, null, null);
+        PHPUnit_Framework_Assert::assertEquals( "Base Version Content", $content, "object content wrong" );
+
+    }
+	
 	
 	/**
 	 * Test listing the system metadata on an object
@@ -802,40 +826,40 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	/**
 	 * Test the UploadHelper's update method
 	 */
-	public function testUpdateHelperLarge() {
-		// use a blocksize of 1 to test multiple transfers.
-		$uploadHelper = new UploadHelper( $this->esu );
-
-		// Create an object with content.
-		$id = $this->esu->createObject( null, null, "Four score and twenty years ago", "text/plain" );
-		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
-		$this->cleanup[] = $id;
-	
-		// update the object contents
-		$tempFile = tmpfile();
-		for( $i = 0; $i<200000; $i++ ) {
-			fprintf( $tempFile, "hellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohello\n" );	
-		}
-		fseek( $tempFile, 0 );
-		
-		$uploadHelper->updateObjectFromStream( $id, $tempFile, null, null, false );
-		if( $uploadHelper->isFailed() ) {
-			throw $uploadHelper->getError();
-		}
-				
-		// Download the file
-		$tempFile2 = tmpfile();
-		$downloadHelper = new DownloadHelper( $this->esu );
-		$downloadHelper->readObjectToStream( $id, $tempFile2, false );
-		
-		// Get file sizes
-		fseek( $tempFile, 0, SEEK_END );
-		fseek( $tempFile2, 0, SEEK_END );
-		$sizeIn = ftell( $tempFile );
-		$sizeOut = ftell( $tempFile2 );
-		PHPUnit_Framework_Assert::assertEquals( $sizeIn, $sizeOut, 'File sizes do not match' );
-		
-	}
+//	public function testUpdateHelperLarge() {
+//		// use a blocksize of 1 to test multiple transfers.
+//		$uploadHelper = new UploadHelper( $this->esu );
+//
+//		// Create an object with content.
+//		$id = $this->esu->createObject( null, null, "Four score and twenty years ago", "text/plain" );
+//		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+//		$this->cleanup[] = $id;
+//	
+//		// update the object contents
+//		$tempFile = tmpfile();
+//		for( $i = 0; $i<200000; $i++ ) {
+//			fprintf( $tempFile, "hellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohello\n" );	
+//		}
+//		fseek( $tempFile, 0 );
+//		
+//		$uploadHelper->updateObjectFromStream( $id, $tempFile, null, null, false );
+//		if( $uploadHelper->isFailed() ) {
+//			throw $uploadHelper->getError();
+//		}
+//				
+//		// Download the file
+//		$tempFile2 = tmpfile();
+//		$downloadHelper = new DownloadHelper( $this->esu );
+//		$downloadHelper->readObjectToStream( $id, $tempFile2, false );
+//		
+//		// Get file sizes
+//		fseek( $tempFile, 0, SEEK_END );
+//		fseek( $tempFile2, 0, SEEK_END );
+//		$sizeIn = ftell( $tempFile );
+//		$sizeOut = ftell( $tempFile2 );
+//		PHPUnit_Framework_Assert::assertEquals( $sizeIn, $sizeOut, 'File sizes do not match' );
+//		
+//	}
 	
 	/**
 	 * Tests the download helper.  Tests both single and multiple requests.
@@ -919,12 +943,12 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
         echo "Sharable URL: " . $url . "\n";
         
         // Read the data back
-        $req = &new HTTP_Request( $url );
-        $result = $req->sendRequest( true );
-		if( $result !== true ) {
-			die( "HTTP request to " . $url . failed );
+        $req = &new HTTP_Request2( $url );
+        $response = $req->send();
+		if( $response->getStatus() > 399 ) {
+			die( "HTTP request to " . $url . " failed: " . $response->getReasonPhrase() );
 		}
-        $content = $req->getResponseBody();
+        $content = $response->getBody();
 		PHPUnit_Framework_Assert::assertEquals( "Four score and twenty years ago", $content, "object content wrong" );						
     }
     
@@ -943,14 +967,12 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
         echo "Sharable URL: " . $url . "\n";
         
         // Read the data back
-        $req = &new HTTP_Request( $url );
-        $result = $req->sendRequest( true );
-		if( $result !== true ) {
-			PHPUnit_Framework_Assert::assertTrue( false, "HTTP request to " . $url . failed );
-		} else if( $req->getResponseCode() > 399 ) {
-			PHPUnit_Framework_Assert::assertTrue( false, "HTTP status " . $req->getResponseCode() );
+        $req = &new HTTP_Request2( $url );
+        $response = $req->send();
+		if( $response->getStatus() > 399 ) {
+			PHPUnit_Framework_Assert::assertTrue( false, "HTTP status " . $req->getStatus() );
 		}
-        $content = $req->getResponseBody();
+        $content = $response->getBody();
         echo "content: " . $content;
 		PHPUnit_Framework_Assert::assertEquals( "Four score and twenty years ago", $content, "object content wrong" );						
     }
@@ -983,6 +1005,155 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		PHPUnit_Framework_Assert::assertEquals( "bar2 bar2", $meta->getMetadata( "unlistable2" )->getValue(), "value of 'unlistable2' wrong" );
 		PHPUnit_Framework_Assert::assertEquals( $acl, $newacl, "ACLs don't match" );
 	}
+	
+	public function testChecksum() {
+		$data = "hello world";
+		$ck = new Checksum( "SHA0" );
+		$ck->update( $data );
+		PHPUnit_Framework_Assert::assertEquals( "SHA0/11/9fce82c34887c1953b40b3a2883e18850c4fa8a6", "$ck", "value of 'checksum' wrong" );
+	}
+	
+	public function testCreateChecksum() {
+		$ck = new Checksum( "SHA0" );
+		$id = $this->esu->createObject( null, null, "hello", "text/plain", $ck );
+		$this->cleanup[] = $id;
+		PHPUnit_Framework_Assert::assertTrue( strlen("".$ck) > 0, "Checksum is empty" );
+	}
+
+	/**
+	 * Tests reading back a checksum.  Note that for this test to operate fully, you
+	 * should create a policy that creates an erasure coded replica for objects with
+	 * metadata "policy=erasure"
+	 */
+	public function testReadChecksum()
+	{
+		$ck = new Checksum( "SHA0" );
+		$mlist = new MetadataList();
+		$meta = new Metadata( "policy", "erasure", false );
+		$mlist->addMetadata( $meta );
+		$id = $this->esu->createObject(null, $mlist, "Four score and seven years ago", "text/plain", $ck);
+		$this->checksum[] = $id;
+		PHPUnit_Framework_Assert::assertTrue( strlen("".$ck) > 0, "Checksum is empty" );
+		
+		// Read back.
+		$ck2 = new Checksum( "SHA0" );
+		$content = $this->esu->ReadObject($id, null, null, $ck2);
+		PHPUnit_Framework_Assert::assertEquals("Four score and seven years ago", $content, "object content wrong");
+		if( $ck2->getExpectedValue() != null ) {
+			PHPUnit_Framework_Assert::assertEquals( "".$ck, "".$ck2, "object checksum wrong");
+			PHPUnit_Framework_Assert::assertEquals( $ck2->getExpectedValue(), "".$ck2, "expected checksum wrong");
+		}
+	}
+	
+	/**
+	 * Tests upload and download helpers with checksumming enabled.
+     * Note that for this test to operate fully, you
+	 * should create a policy that creates an erasure coded replica for objects with
+	 * metadata "policy=erasure"	 
+	 */
+	public function testChecksumming() {
+		// use a blocksize of 1 to test multiple transfers.
+		$uploadHelper = new UploadHelper( $this->esu );
+		$uploadHelper->setComputeChecksums( true );
+
+		$mlist = new MetadataList();
+		$meta = new Metadata( "policy", "erasure", false );
+		$mlist->addMetadata( $meta );
+		$ck = new Checksum( "SHA0" );
+		
+		// update the object contents
+		$tempFile = tmpfile();
+		for( $i = 0; $i<200000; $i++ ) {
+			fprintf( $tempFile, "hellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohello\n" );	
+		}
+		fseek( $tempFile, 0 );
+		
+		$id = $uploadHelper->createObjectFromStream( $tempFile, null, $mlist, false );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $id;
+		if( $uploadHelper->isFailed() ) {
+			throw $uploadHelper->getError();
+		}
+				
+		// Download the file
+		$tempFile2 = tmpfile();
+		$downloadHelper = new DownloadHelper( $this->esu );
+		$downloadHelper->setChecksumming( true );
+		$downloadHelper->readObjectToStream( $id, $tempFile2, false );
+		
+		// Get file sizes
+		fseek( $tempFile, 0, SEEK_END );
+		fseek( $tempFile2, 0, SEEK_END );
+		$sizeIn = ftell( $tempFile );
+		$sizeOut = ftell( $tempFile2 );
+		PHPUnit_Framework_Assert::assertEquals( $sizeIn, $sizeOut, 'File sizes do not match' );
+	}	
+	
+	/**
+	 * The signature algorithm declares that spaces in header values should be normalized.
+	 */
+	public function testNormalizeSpace() {
+		$mlist = new MetadataList();
+		$listable = new Metadata( "listable", "foo", true );
+		$unlistable = new Metadata( "unlistable", "bar", false );
+		$listable2 = new Metadata( "listable2", "foo2   foo2", true );
+		$unlistable2 = new Metadata( "unlistable2", "bar2      bar2", false );
+		$mlist->addMetadata( $listable );
+		$mlist->addMetadata( $unlistable );
+		$mlist->addMetadata( $listable2 );
+		$mlist->addMetadata( $unlistable2 );
+		$id = $this->esu->createObject( null, $mlist, null, null );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $id;
+		
+		// Read and validate the metadata
+		$meta = $this->esu->getUserMetadata( $id, null );
+		PHPUnit_Framework_Assert::assertEquals( "foo", $meta->getMetadata( "listable" )->getValue(), "value of 'listable' wrong" );
+		PHPUnit_Framework_Assert::assertEquals( "foo2   foo2", $meta->getMetadata( "listable2" )->getValue(), "value of 'listable2' wrong" );
+		PHPUnit_Framework_Assert::assertEquals( "bar", $meta->getMetadata( "unlistable" )->getValue(), "value of 'unlistable' wrong" );
+		PHPUnit_Framework_Assert::assertEquals( "bar2      bar2", $meta->getMetadata( "unlistable2" )->getValue(), "value of 'unlistable2' wrong" );
+		
+	}
+	
+	public function testRename() {
+		$op1 = new ObjectPath("/" . $this->random8() . ".tmp");
+		$op2 = new ObjectPath("/" . $this->random8() . ".tmp");
+		$op3 = new ObjectPath("/" . $this->random8() . ".tmp");
+		$op4 = new ObjectPath("/" . $this->random8() . ".tmp");
+		$id = $this->esu->createObjectOnPath($op1, null, null, "Four score and seven years ago", "text/plain");
+		PHPUnit_Framework_Assert::assertNotNull($id, "null ID returned");
+		$this->cleanup[] = $id;
+
+		// Rename the object
+		$this->esu->rename($op1, $op2, false);
+
+		// Read back the content
+		$content = $this->esu->readObject($op2, null, null);
+		PHPUnit_Framework_Assert::assertEquals("Four score and seven years ago", $content, "object content wrong");
+
+		// Attempt overwrite
+		$id = $this->esu->createObjectOnPath($op3, null, null, "Four score and seven years ago", "text/plain");
+		PHPUnit_Framework_Assert::assertNotNull(id, "null ID returned");
+		$this->cleanup[] = $id;
+		$id = $this->esu->createObjectOnPath($op4, null, null, "You shouldn't see me", "text/plain");
+		PHPUnit_Framework_Assert::assertNotNull(id, "null ID returned");
+		$this->cleanup[] = $id;
+		$this->esu->rename($op3, $op4, true);
+
+		// Wait for rename to complete
+		sleep(5);
+
+		// Read back the content
+		$content = $this->esu->readObject($op4, null, null);
+		PHPUnit_Framework_Assert::assertEquals("Four score and seven years ago", $content, "object content wrong (3)");
+	}
+	
+	public function testGetServiceInformation() {
+		$si = $this->esu->getServiceInformation();
+		
+		PHPUnit_Framework_Assert::assertNotNull( $si->getAtmosVersion(), "Atmos version null" );
+	}
+
 	
 	private function directoryContains( $dirList, $op ) {
 		print "Looking for: " . $op . "\n";
