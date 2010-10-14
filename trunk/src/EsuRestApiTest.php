@@ -1032,7 +1032,7 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		$meta = new Metadata( "policy", "erasure", false );
 		$mlist->addMetadata( $meta );
 		$id = $this->esu->createObject(null, $mlist, "Four score and seven years ago", "text/plain", $ck);
-		$this->checksum[] = $id;
+		$this->cleanup[] = $id;
 		PHPUnit_Framework_Assert::assertTrue( strlen("".$ck) > 0, "Checksum is empty" );
 		
 		// Read back.
@@ -1152,6 +1152,25 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		$si = $this->esu->getServiceInformation();
 		
 		PHPUnit_Framework_Assert::assertNotNull( $si->getAtmosVersion(), "Atmos version null" );
+	}
+	
+	public function testGetObjectInfo() {
+		$mlist = new MetadataList();
+		$meta = new Metadata( "policy", "expiredelete", false );
+		$mlist->addMetadata( $meta );
+		$id = $this->esu->createObject(null, $mlist, "Four score and seven years ago", "text/plain");
+		$this->cleanup[] = $id;
+		
+		$info = $this->esu->getObjectInfo($id);
+		PHPUnit_Framework_Assert::assertNotNull( $info->objectId, "Object info ID null" );
+		PHPUnit_Framework_Assert::assertNotNull( $info->selection, "Object info ID null" );
+		PHPUnit_Framework_Assert::assertNotNull( $info->expiration, "Object info ID null" );
+		PHPUnit_Framework_Assert::assertNotNull( $info->retention, "Object info ID null" );
+		PHPUnit_Framework_Assert::assertNotNull( $info->replicas, "Object info ID null" );
+		PHPUnit_Framework_Assert::assertTrue( count($info->replicas)>0, "No replicas in replica array" );
+		if( count($info->replicas) > 1 ) {
+			PHPUnit_Framework_Assert::assertTrue( $info->replicas[0]->id != $info->replicas[1]->id, "Replica IDs equal" );
+		}
 	}
 
 	

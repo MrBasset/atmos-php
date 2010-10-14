@@ -1249,6 +1249,34 @@ class EsuRestApi implements EsuApi {
 		return $this->parseServiceInformation( $response->getBody() );
     }
     
+    public function getObjectInfo( $id ) {
+   		$resource = $this->getResourcePath( $this->context, $id );
+		$req = $this->buildRequest( $resource, "info" );
+		$headers = array();
+		$headers["x-emc-uid"] = $this->uid;
+		// Add date
+		$headers["Date"] = gmdate( 'r' );
+		
+		// Sign request
+		$this->signRequest( $req, "GET", $resource, $headers, null );
+		
+		try {
+			$response = $req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( "Sending request failed: " . $e );
+		}
+		
+		if( $response->getStatus() > 399 ) {
+			$this->handleError( $response );
+		}
+	
+		// Parse the returned objects.  They are passed in the response
+		// body in an XML format.
+		return $this->parseObjectInfo( $response->getBody() );
+		
+	}
+    
+    
 	
 	/////////////////////
 	// Private Methods //
@@ -1783,6 +1811,87 @@ class EsuRestApi implements EsuApi {
 		} else {
 			throw new EsuException( "Null data passed to parseServiceInformation" );
 		}
+	}
+	
+	private function parseObjectInfo( $xml ) {
+		$this->trace( "Response body: " . $xml );
+		$info = new ObjectInfo();
+		$info->rawXml = $xml;
+		if( $xml != null ) {
+			// Note that this is the newer php5 DOM and not the older
+			// domxml extension.  If you're running XAMPP, you might have
+			// to disable the domxml extension in php.ini.
+			$dom = new DOMDocument( );
+			if( $dom->loadXML( $xml ) === true ) {
+				$info->objectId = new ObjectId( $dom->getElementsByTagName( "objectId")->item(0)->nodeValue );
+				$info->selection = $dom->getElementsByTagName( "selection")->item(0)->nodeValue;
+				$info->retention = $this->parseRetention( $dom->getElementsByTagName( "retention")->item(0) );
+				$info->expiration = $this->parseExpiration( $dom->getElementsByTagName( "expiration")->item(0) );
+				$this->parseReplicas( $dom->getElementsByTagName( "replica"), &$info->replicas );
+			} else {
+				throw new EsuException( "Could not parse XML" );
+			}
+		} else {
+			throw new EsuException( "Null data passed to parseObjectInfo" );
+		}
+		return $info;
+	}
+	
+	/**
+	 * Parse retention information from a node
+	 * @param DOMElement $node
+	 */
+	private function parseRetention( $node ) {
+		$retention = new ObjectRetention();
+		
+		$retention->enabled = $node->getElementsByTagName( "enabled" )->item(0)->nodeValue == "true";
+		if( $retention->enabled ) {
+			$retention->endAt = new DateTime( $node->getElementsByTagName( "endAt" )->item(0)->nodeValue );
+		}
+		
+		return $retention;
+	}
+	
+	/**
+	 * Parse retention information from a node
+	 * @param DOMElement $node
+	 */
+	private function parseExpiration( $node ) {
+		$expiration = new ObjectExpiration();
+		
+		$expiration->enabled = $node->getElementsByTagName( "enabled" )->item(0)->nodeValue == "true";
+		if( $expiration->enabled ) {
+			$expiration->endAt = new DateTime( $node->getElementsByTagName( "endAt" )->item(0)->nodeValue );
+		}
+		
+		return $expiration;
+	}
+	
+	/**
+	 * Parses a replica list
+	 * @param DOMNodeList $replicaXml
+	 * @param Array $replicaArray
+	 */
+	private function parseReplicas( $replicaXml, &$replicaArray ) {
+		for( $i=0; $i<$replicaXml->length; $i++ ) {
+			$replicaArray[] = $this->parseReplica( $replicaXml->item($i));
+		}
+	}
+	
+	/**
+	 * Parses a replica record
+	 * @param DOMElement $replicaElement
+	 */
+	private function parseReplica( $replicaElement ) {
+		$replica = new ObjectReplica();
+		
+		$replica->id = $replicaElement->getElementsByTagName( "id" )->item(0)->nodeValue;
+		$replica->location = $replicaElement->getElementsByTagName( "location" )->item(0)->nodeValue;
+		$replica->replicaType = $replicaElement->getElementsByTagName( "type" )->item(0)->nodeValue;
+		$replica->storageType = $replicaElement->getElementsByTagName( "storageType" )->item(0)->nodeValue;
+		$replica->current = $replicaElement->getElementsByTagName( "current" )->item(0)->nodeValue == "true";
+		
+		return $replica;
 	}
 	
 }
