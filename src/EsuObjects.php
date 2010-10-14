@@ -805,4 +805,111 @@ class Checksum {
 	}
 }
 
+/**
+ * Encapsulates information about an object, including its replicas, 
+ * retention, and expiration information.
+ */
+class ObjectInfo {
+	/**
+	 * Raw response from GetObjectInfo
+	 * @var string
+	 */
+	public $rawXml;
+	
+	/**
+	 * ObjectId of the object
+	 * @var ObjectId
+	 */
+	public $objectId;
+	
+	/**
+	 * Object's selection
+	 * @var string
+	 */
+	public $selection;
+	
+	/**
+	 * Object replicas (where the object is located in the cloud)
+	 * @var Array of ObjectReplica
+	 */
+	public $replicas;
+	
+	/**
+	 * Retention information for the object
+	 * @var ObjectRetention
+	 */
+	public $retention;
+	
+	/**
+	 * Expiration information for the object
+	 * @var ObjectExpiration
+	 */
+	public $expiration;
+	
+	public function __construct() {
+		$replicas = Array();
+	}
+}
+
+/**
+ * Encapsulates replica information about an object
+ */
+class ObjectReplica {
+	/**
+	 * Replica identifier
+	 * @var string
+	 */
+	public $id;
+	/**
+	 * Replica location in the cloud
+	 * @var string
+	 */
+	public $location;
+	/**
+	 * Replica type (sync or async)
+	 * @var string
+	 */
+	public $replicaType;
+	/**
+	 * True if the replica is current, false
+	 * if the replica needs or is being updated.
+	 * @var boolean
+	 */
+	public $current;
+	/**
+	 * Storage type for the replica
+	 * @var string
+	 */
+	public $storageType;
+}
+
+/**
+ * Encapsulates retention information about an object.
+ */
+class ObjectRetention {
+	/**
+	 * True if retention is enabled.
+	 * @var boolean
+	 */
+	public $enabled;
+	/**
+	 * Timestamp when the retention period ends
+	 * @var DateTime
+	 */
+	public $endAt;
+}
+
+class ObjectExpiration {
+	/**
+	 * True if retention is enabled.
+	 * @var boolean
+	 */
+	public $enabled;
+	
+	/**
+	 * Timestamp when the retention period ends
+	 * @var DateTime
+	 */
+	public $endAt;
+}
 ?>

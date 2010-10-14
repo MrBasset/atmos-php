@@ -273,5 +273,13 @@ interface EsuApi {
      * @return ServiceInformation the service information object.
      */
     public function getServiceInformation();
+    
+    /**
+     * Gets information about an object including its replicas,
+     * retention, and expiration information.
+     * @param Identifier $id The object to get information about.
+     * @return ObjectInfo information about the object
+     */
+    public function getObjectInfo( $id );
 }
 ?>
