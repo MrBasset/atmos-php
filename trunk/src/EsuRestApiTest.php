@@ -1156,7 +1156,7 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	
 	public function testGetObjectInfo() {
 		$mlist = new MetadataList();
-		$meta = new Metadata( "policy", "expiredelete", false );
+		$meta = new Metadata( "policy", "retaindelete", false );
 		$mlist->addMetadata( $meta );
 		$id = $this->esu->createObject(null, $mlist, "Four score and seven years ago", "text/plain");
 		$this->cleanup[] = $id;
