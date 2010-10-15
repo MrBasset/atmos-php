@@ -54,11 +54,6 @@ class SHA0 {
 		$this->constants[2] = 0x8f1b << 16 | 0xbcdc;
 		$this->constants[3] = 0xca62 << 16 | 0xc1d6;
         
-        
-        //print "IV\n";
-        //print_r( $this->state );
-        //print "Constants\n";
-        //print_r( $this->constants );
 	}
 	
 	
@@ -160,123 +155,6 @@ class SHA0 {
             $d = $this->state[3];
             $e = $this->state[4];
 
-//            // round 1
-//            for ($ii = 0; $ii < 20; $ii += 5)
-//            {
-//                $e = $this->add($e, $this->add($buffer[$ii + 0], $this->constants[0]));
-//                $e = $this->add($e, ($b & $c) ^ (~$b & $d));
-//                $e = $this->add($e, $a << 5 | $a >> 27);
-//                $b = $b << 30 | $b >> 2;
-//                
-//                $d = $this->add($d, $this->add( $buffer[$ii + 1], $this->constants[0]));
-//                $d = $this->add($d, ($a & $b) ^ (~$a & $c));
-//                $d = $this->add($d, $e << 5 | $e >> 27);
-//                $a = $a << 30 | $a >> 2;
-//
-//                $c = $this->add($c, $this->add( $buffer[$ii + 2], $this->constants[0]));
-//                $c = $this->add($c, ($e & $a) ^ (~$e & $b));
-//                $c = $this->add($c, $d << 5 | $d >> 27);
-//                $e = $e << 30 | $e >> 2;
-//
-//                $b = $this->add($b, $this->add( $buffer[$ii + 3], $this->constants[0]));
-//                $b = $this->add($b, ($d & $e) ^ (~$d & $a));
-//                $b = $this->add($b, $c << 5 | $c >> 27);
-//                $d = $d << 30 | $d >> 2;
-//
-//                $a = $this->add($a, $this->add( $buffer[$ii + 4], $this->constants[0]));
-//                $a = $this->add($a, ($c & $d) ^ (~$c & $e));
-//                $a = $this->add($a, $b << 5 | $b >> 27);
-//                $c = $c << 30 | $c >> 2;
-//            }
-//
-//            // round 2
-//            for ($ii = 20; $ii < 40; $ii += 5)
-//            {
-//                $e = $this->add($e, $this->add( $buffer[$ii + 0], $this->constants[1]));
-//                $e = $this->add($e, $b ^ $c ^ $d);
-//                $e = $this->add($e, $a << 5 | $a >> 27);
-//                $b = $b << 30 | $b >> 2;
-//
-//                $d = $this->add($d, $this->add( $buffer[$ii + 1], $this->constants[1]));
-//                $d = $this->add($d, $a ^ $b ^ $c);
-//                $d = $this->add($d, $e << 5 | $e >> 27);
-//                $a = $a << 30 | $a >> 2;
-//
-//                $c = $this->add($c, $this->add( $buffer[$ii + 2], $this->constants[1]));
-//                $c = $this->add($c, $e ^ $a ^ $b);
-//                $c = $this->add($c, $d << 5 | $d >> 27);
-//                $e = $e << 30 | $e >> 2;
-//
-//                $b = $this->add($b, $this->add( $buffer[$ii + 3], $this->constants[1]));
-//                $b = $this->add($b, $d ^ $e ^ $a);
-//                $b = $this->add($b, $c << 5 | $c >> 27);
-//                $d = $d << 30 | $d >> 2;
-//
-//                $a = $this->add($a, $this->add( $buffer[$ii + 4], $this->constants[1]));
-//                $a = $this->add($a, $c ^ $d ^ $e);
-//                $a = $this->add($a, $b << 5 | $b >> 27);
-//                $c = $c << 30 | $c >> 2;
-//            }
-//
-//            // round 3
-//            for ( $ii = 40; $ii < 60; $ii += 5)
-//            {
-//                $e = $this->add($e, $this->add( $buffer[$ii + 0], $this->constants[2]));
-//                $e = $this->add($e, ($b & $c) ^ ($b & $d) ^ ($c & $d));
-//                $e = $this->add($e, $a << 5 | $a >> 27);
-//                $b = $b << 30 | $b >> 2;
-//
-//                $d = $this->add($d, $this->add( $buffer[$ii + 1], $this->constants[2]));
-//                $d = $this->add($d, (a & b) ^ (a & c) ^ (b & c));
-//                $d = $this->add($d, $e << 5 | $e >> 27);
-//                $a = $a << 30 | $a >> 2;
-//
-//                $c = $this->add($c, $this->add( $buffer[$ii + 2], $this->constants[2]));
-//                $c = $this->add($c, (e & a) ^ (e & b) ^ (a & b));
-//                $c = $this->add($c, $d << 5 | $d >> 27);
-//                $e = $e << 30 | $e >> 2;
-//
-//                $b = $this->add($b, $this->add( $buffer[$ii + 3], $this->constants[2]));
-//                $b = $this->add($b, (d & e) ^ (d & a) ^ (e & a));
-//                $b = $this->add($b, $c << 5 | $c >> 27);
-//                $d = $d << 30 | $d >> 2;
-//
-//                $a = $this->add($a, $this->add( $buffer[$ii + 4], $this->constants[2]));
-//                $a = $this->add($a, (c & d) ^ (c & e) ^ (d & e));
-//                $a = $this->add($a, $b << 5 | $b >> 27);
-//                $c = $c << 30 | $c >> 2;
-//            }
-//
-//            // round 4
-//            for ($ii = 60; $ii < 80; $ii += 5)
-//            {
-//                $e = $this->add($e, $this->add( $buffer[$ii + 0], $this->constants[3]));
-//                $e = $this->add($e, $b ^ $c ^ d);
-//                $e = $this->add($e, $a << 5 | $a >> 27);
-//                $b = $b << 30 | $b >> 2;
-//
-//                $d = $this->add($d, $this->add( $buffer[$ii + 1], $this->constants[3]));
-//                $d = $this->add($d, $a ^ $b ^ c);
-//                $d = $this->add($d, $e << 5 | $e >> 27);
-//                $a = $a << 30 | $a >> 2;
-//
-//                $c = $this->add($c, $this->add( $buffer[$ii + 2], $this->constants[3]));
-//                $c = $this->add($c, $e ^ $a ^ b);
-//                $c = $this->add($c, $d << 5 | $d >> 27);
-//                $e = $e << 30 | $e >> 2;
-//
-//                $b = $this->add($b, $this->add( $buffer[$ii + 3], $this->constants[3]));
-//                $b = $this->add($b, $d ^ $e ^ a);
-//                $b = $this->add($b, $c << 5 | $c >> 27);
-//                $d = $d << 30 | $d >> 2;
-//
-//                $a = $this->add($a, $this->add( $buffer[$ii + 4], $this->constants[3]));
-//                $a = $this->add($a, $c ^ $d ^ e);
-//                $a = $this->add($a, $b << 5 | $b >> 27);
-//                $c = $c << 30 | $c >> 2;
-//            }
-
-            
         $e = $this->add($e, (($a << 5)|($a >> 27)), $this->f1($b, $c, $d), $buffer[0]);  $b =(($b << 30)|($b >> 2));
         $d = $this->add($d, (($e << 5)|($e >> 27)), $this->f1($a, $b, $c), $buffer[1]);  $a =(($a << 30)|($a >> 2));
         $c = $this->add($c, (($d << 5)|($d >> 27)), $this->f1($e, $a, $b), $buffer[2]);  $e =(($e << 30)|($e >> 2));

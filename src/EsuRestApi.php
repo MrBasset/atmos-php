@@ -1846,7 +1846,9 @@ class EsuRestApi implements EsuApi {
 		
 		$retention->enabled = $node->getElementsByTagName( "enabled" )->item(0)->nodeValue == "true";
 		if( $retention->enabled ) {
-			$retention->endAt = new DateTime( $node->getElementsByTagName( "endAt" )->item(0)->nodeValue );
+			$dateStr = $node->getElementsByTagName( "endAt" )->item(0)->nodeValue;
+			$dateStr = str_replace( "Z", "+0000", $dateStr );
+			$retention->endAt = new DateTime( $dateStr, new DateTimeZone("UTC") );
 		}
 		
 		return $retention;
@@ -1861,7 +1863,9 @@ class EsuRestApi implements EsuApi {
 		
 		$expiration->enabled = $node->getElementsByTagName( "enabled" )->item(0)->nodeValue == "true";
 		if( $expiration->enabled ) {
-			$expiration->endAt = new DateTime( $node->getElementsByTagName( "endAt" )->item(0)->nodeValue );
+			$dateStr = $node->getElementsByTagName( "endAt" )->item(0)->nodeValue;
+			$dateStr = str_replace( "Z", "+0000", $dateStr );
+			$expiration->endAt = new DateTime( $dateStr, new DateTimeZone("UTC") );
 		}
 		
 		return $expiration;
