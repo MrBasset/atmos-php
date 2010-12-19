@@ -72,7 +72,7 @@ class ObjectId extends Identifier {
 		
 		// Validate that the ID is correct
 		if( ereg( ObjectId::$ID_FORMAT, $id ) === false ) {
-			throw new EsuException( "Identifier: " . $id . " is not in the correct format" );
+			throw new EsuException( "ObjectId: " . $id . " is not in the correct format" );
 		}
 		
 		$this->id = $id;
@@ -117,8 +117,10 @@ class ObjectPath extends Identifier {
 		}
 		
 		// Validate that the ID is correct
-		if( ereg( ObjectPath::$PATH_FORMAT, $path ) === false ) {
-			throw new EsuException( "Identifier: " . $path . " is not in the correct format" );
+		if ($path !== "/") {
+			if( ereg( ObjectPath::$PATH_FORMAT, $path ) === false ) {
+			throw new EsuException( "ObjectPath: " . $path . " is not in the correct format" );
+			}
 		}
 		
 		$this->path = $path;
@@ -587,6 +589,7 @@ class DirectoryEntry {
 	private $path;
 	private $id;
 	private $type;
+	private $name;
 	/**
 	 * @return the path
 	 */
@@ -622,6 +625,18 @@ class DirectoryEntry {
 	 */
 	public function setType( $type ) {
 		$this->type = $type;
+	}
+	/**
+	 * @return the name
+	 */
+	public function getName() {
+		return $this->name;
+	}
+	/**
+	 * @param name the name to set
+	 */
+	public function setName( $name ) {
+		$this->name = $name;
 	}
 	
 	/**
