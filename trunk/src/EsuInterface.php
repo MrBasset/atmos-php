@@ -77,6 +77,7 @@ interface EsuApi {
 	 * null, the ACL will not be modified.
 	 * @param MetadataList $metadata Metadata list for the new object.  
 	 * Optional.  If null, no changes will be made to the object's metadata.
+	 * @param Extent $extent the portion of the object data to write. Optional.
 	 * @param string $data The initial contents of the object.  May be appended
 	 * to later. Optional, default is NULL (no content changes).
 	 * @param string $mimeType the MIME type of the content.  Optional, 
@@ -230,10 +231,10 @@ interface EsuApi {
 	
     /**
      * Lists the contents of a directory.
-     * @param ObjectPath $path the path to list.  Must be a directory.
+     * @param Identifier $id the identifier of the directory object to list.
      * @return array the directory entries in the directory.
      */
-    public function listDirectory( $path );
+    public function listDirectory( $id );
     
     /**
      * An Atmos user (UID) can construct a pre-authenticated URL to an 
@@ -273,6 +274,12 @@ interface EsuApi {
      * @return ServiceInformation the service information object.
      */
     public function getServiceInformation();
+
+    /**
+     * Returns the Atmos protocol information 
+	 * @param $protocolInfo
+     */
+	public function getProtocolInformation( &$protocolInfo );
     
     /**
      * Gets information about an object including its replicas,
