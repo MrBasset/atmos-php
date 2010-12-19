@@ -43,6 +43,7 @@ class EsuRestApi implements EsuApi {
 	private $secret;
 	private $debug = false;
 	private $timeout = null;
+	private $followRedirects = false;
 	
 	private $context = "/rest";
 	private $proto;
@@ -111,9 +112,11 @@ class EsuRestApi implements EsuApi {
 		if( $metadata != null ) {
 			$this->processMetadata( $metadata, $headers );
 		}
-		
-		$this->trace( "meta " . $headers["x-emc-meta"] );
-		
+
+		if ( isset( $headers["x-emc-meta"] ) ) {
+		  $this->trace( "meta " . $headers["x-emc-meta"] );
+		}
+
 		// Add acl
 		if( $acl != null ) {
 			$this->processAcl( $acl, $headers );
@@ -146,7 +149,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 				
@@ -204,7 +207,9 @@ class EsuRestApi implements EsuApi {
 			$this->processMetadata( $metadata, $headers );
 		}
 		
-		$this->trace( "meta " . $headers["x-emc-meta"] );
+		if ( isset( $headers["x-emc-meta"] ) ) {
+		  $this->trace( "meta " . $headers["x-emc-meta"] );
+		}
 		
 		// Add acl
 		if( $acl != null ) {
@@ -238,7 +243,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -276,7 +281,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -313,7 +318,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 	
@@ -364,7 +369,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 			
@@ -401,7 +406,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -445,7 +450,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -476,7 +481,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 	
@@ -509,7 +514,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -549,7 +554,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}		
 	}
@@ -585,7 +590,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -635,7 +640,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -688,7 +693,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -735,7 +740,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -769,7 +774,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -814,7 +819,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -881,7 +886,9 @@ class EsuRestApi implements EsuApi {
 			$headers["Range"] = "Bytes=" . $extent->getOffset() . "-" . $end; 
 		}
 		
-		$this->trace( "meta " . $headers["x-emc-meta"] );
+		if ( isset( $headers["x-emc-meta"] ) ) {
+		  $this->trace( "meta " . $headers["x-emc-meta"] );
+		}
 		
 		// Add acl
 		if( $acl != null ) {
@@ -915,7 +922,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -953,7 +960,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -989,7 +996,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -997,21 +1004,15 @@ class EsuRestApi implements EsuApi {
 	
 	/**
      * Lists the contents of a directory.
-     * @param ObjectPath $path the path to list.  Must be a directory.
+     * @param Identifier $id the identifier of the directory object to list.
      * @return array the directory entries in the directory.
      */
-    public function listDirectory( $path ) {
-    	if( ! is_a( $path, "ObjectPath" ) ) {
-    		throw new EsuException( "identifier must be an ObjectPath" );
-    	}
-    	if( !$path->isDirectory() ) {
-    		throw new EsuException( "ObjectPath must be a directory" );
-    	}
+    public function listDirectory( $id ) {
+    	$namespace = is_a( $id, "ObjectPath" ) ? true : false; 
     	
     	// fetch the directory's content as a blob
-    	$data = $this->readObject( $path );
+    	$data = $this->readObject( $id );
 		$this->trace( $data );
-    	
     	$objs = array();
     	
     	// Parse the XML
@@ -1038,21 +1039,25 @@ class EsuRestApi implements EsuApi {
 				for( $j=0; $j<$gc->length; $j++ ) {
 					$tag = $gc->item($j);
 					$xval = $tag->nodeValue;
-					if( $tag->tagName == "ObjectId" ) {
-						$de->setId( new ObjectId( $xval ) );
-					} else if( $tag->tagName == "Filename" ) {
-						$name = $xval;
-					} else if( $tag->tagName == "FileType" ) {
-						$type = $xval;
+					if (! empty($tag->tagName)) {
+						if( strtolower($tag->tagName) == "objectid" ) {
+							$de->setId( new ObjectId( $xval ) );
+						} else if( $tag->tagName == "Filename" ) {
+							$name = $xval;
+						} else if( $tag->tagName == "FileType" ) {
+							$type = $xval;
+						}
 					}
-					
-					
 				}
-				$name = $path . $name;
-				if( "directory" == $type ) {
-					$name .= "/";
+
+				$de->setName( $name );				
+				if ($namespace) {
+					$name = $id . $name;
+					if( "directory" == $type ) {
+						$name .= "/";
+					}
+					$de->setPath( new ObjectPath( $name ) );
 				}
-				$de->setPath( new ObjectPath( $name ) );
 				$de->setType( $type );	
 				
 				$objs[] = $de;
@@ -1092,7 +1097,22 @@ class EsuRestApi implements EsuApi {
         
         return $url;
     }
-    
+
+    /**
+     * Returns the Atmos protocol information 
+	 * @param $protocolInfo
+     */
+	public function getProtocolInformation( &$protocolInfo )
+		{
+		$protocolInfo['transportProtocol'] = $this->proto;
+		$protocolInfo['accessPoint'] = $this->host;
+		$protocolInfo['accessPort'] = $this->port;
+		$protocolInfo['accessPortProtocol'] = 'TCP/IP';
+        $protocolInfo['accessScheme'] = $this->proto . "://" . $this->host . ":" . $this->port; 
+        $protocolInfo['userId'] = $this->uid; 
+		return;
+		}
+		
     /**
      * Returns all of an object's metadata and its ACL in
      * one call.
@@ -1116,7 +1136,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -1168,12 +1188,17 @@ class EsuRestApi implements EsuApi {
 	/**
 	 * Sets the connection timeout in seconds.  If the connection cannot be
 	 * established in this time period, the request will fail.
-	 * @param float The connection timeout
 	 */
 	public function setTimeout( $timeout ) {
 		$this->timeout = $timeout;
 	}
 	
+	/**
+	 * Set to automatically follow HTTP redirects
+	 */
+	public function setFollowRedirects($follow, $maxRedirects = 5) {
+		$this->followRedirects = $follow;
+	}
 	
 	/**
      * Renames a file or directory within the namespace.
@@ -1214,7 +1239,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
     }
@@ -1241,8 +1266,8 @@ class EsuRestApi implements EsuApi {
 		} catch( HTTP_Request2_Exception $e ) {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
-		
-		if( $response->getStatus() > 399 ) {
+
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 
@@ -1266,7 +1291,7 @@ class EsuRestApi implements EsuApi {
 			throw new EsuException( "Sending request failed: " . $e );
 		}
 		
-		if( $response->getStatus() > 399 ) {
+		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
 	
@@ -1303,7 +1328,10 @@ class EsuRestApi implements EsuApi {
 			$args["timeout"] = $this->timeout;			
 		}
 		$req = &new HTTP_Request2( $url, $args );
-		
+		if( $this->followRedirects ) {
+			$req->setConfig('follow_redirects', true);
+		}
+
 		return $req;
 	}
 	
@@ -1486,11 +1514,11 @@ class EsuRestApi implements EsuApi {
 				}
 			}
 		}
-		
+
 		throw new EsuException( 'Request failed with error ' . 
 			$response->getStatus() . ': ' . $response->getReasonPhrase() . 
 			$response->getBody(), $response->getStatus() );
-		
+
 	}
 	
 	
@@ -1691,15 +1719,17 @@ class EsuRestApi implements EsuApi {
 					$gc = $child->childNodes;
 					for( $j=0; $j<$gc->length; $j++ ) {
 						$tag = $gc->item($j);
-						$this->trace( "found " . $tag->tagName );
-						if( $tag->tagName == "ObjectID" ) {
-							$result->setId( new ObjectId( $tag->nodeValue ) );
-						} else if( $tag->tagName == "SystemMetadataList" ) {
-							$meta = $tag->getElementsByTagName( "Metadata" );
-							$this->parseMetadata( $meta, $mList );
-						} else if( $tag->tagName == "UserMetadataList" ) {
-							$meta = $tag->getElementsByTagName( "Metadata" );
-							$this->parseMetadata( $meta, $mList );						
+						if (! empty($tag->tagName)) {
+							$this->trace( "found " . $tag->tagName );
+							if( $tag->tagName == "ObjectID" ) {
+								$result->setId( new ObjectId( $tag->nodeValue ) );
+							} else if( $tag->tagName == "SystemMetadataList" ) {
+								$meta = $tag->getElementsByTagName( "Metadata" );
+								$this->parseMetadata( $meta, $mList );
+							} else if( $tag->tagName == "UserMetadataList" ) {
+								$meta = $tag->getElementsByTagName( "Metadata" );
+								$this->parseMetadata( $meta, $mList );						
+							}
 						}
 					}
 					$this->trace( "found " . $mList->count() . " metadata " );
@@ -1724,13 +1754,15 @@ class EsuRestApi implements EsuApi {
 			for( $j=0; $j<$gc->length; $j++ ) {
 				$tag = $gc->item($j);
 				$xval = $tag->nodeValue;
-				if( $tag->tagName == "Name" ) {
-					$name = $xval;
-				} else if( $tag->tagName == "Value" ) {
-					$value = $xval;
-				} else if( $tag->tagName == "Listable" ) {
-					if( "true" == $xval ) {
-						$listable = true;
+				if (! empty($tag->tagName)) {
+					if( $tag->tagName == "Name" ) {
+						$name = $xval;
+					} else if( $tag->tagName == "Value" ) {
+						$value = $xval;
+					} else if( $tag->tagName == "Listable" ) {
+						if( "true" == $xval ) {
+							$listable = true;
+						}
 					}
 				}
 			}
