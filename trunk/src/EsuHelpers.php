@@ -35,11 +35,11 @@ interface ProgressListener {
 	 * This method will be called after a chunk has been transferred.
 	 * @param string $currentBytes the number of bytes transferred.  Note that
 	 * the value will be passed as a string since it may be >2GB.
-	 * @param string $bytesTotal the total number of bytes to transfer.  If
+	 * @param string $totalBytes the total number of bytes to transfer.  If
 	 * the total number of bytes is unknown, this value will be -1.  Note that
 	 * the value will be passed as a string since it may be >2GB.
 	 */
-	public function onProgress( $currentBytes, $bytesTotal );
+	public function onProgress( $currentBytes, $totalBytes, $startTime );
 	
 	/**
 	 * This callback will be invoked after the transfer has completed.
@@ -65,8 +65,8 @@ interface ProgressListener {
 class UploadHelper {
 	private $esu;
 	private $buffSize;
-	const DEFAULT_BUFFSIZE = 4194304; // 4MB
-	
+	const   DEFAULT_BUFFSIZE = 4194304; // 4MB
+	private $startTime;
 	private $currentBytes;
 	private $totalBytes;
 	private $complete;
@@ -78,6 +78,7 @@ class UploadHelper {
 	private $checksum;
 	private $computeChecksums;
 	private $mimeType;
+	private $debug = false;
 	
 	/**
 	 * Creates a new upload helper.
@@ -110,7 +111,7 @@ class UploadHelper {
 		}
 		$b = filesize( $file );
 		if( $b > 0 ) { // PHP currently fails >2GB
-			$totalBytes = $b;
+			$this->totalBytes = $b;
 		}
 		return $this->createObjectFromStream( $fd, $acl, $metadata, true );
 	}
@@ -133,7 +134,7 @@ class UploadHelper {
 		}
 		$b = filesize( $file );
 		if( $b > 0 ) { // PHP currently fails >2GB
-			$totalBytes = $b;
+			$this->totalBytes = $b;
 		}
 		return $this->createObjectFromStreamOnPath( $path, $fd, $acl, $metadata, true );
 	}
@@ -154,6 +155,7 @@ class UploadHelper {
 	public function createObjectFromStream( $fd, $acl = null, $metadata = null, 
 		$closeStream = true ) {
 			
+		$this->startTime = time();
 		$this->currentBytes = 0;
 		$this->complete = false;
 		$this->failed = false;
@@ -169,9 +171,10 @@ class UploadHelper {
 		
 		// First call should be to create object
 		try {
+			$this->progress( 0 );
 			$data = $this->readChunk();
-			print "Creating object with initial chunk of " . strlen( $data ) . " bytes\n";
-			print "Checksum: $this->checksum\n";
+			$this->trace( "Creating object with initial chunk of " . strlen( $data ) . " bytes\n" );
+			$this->trace( "Checksum: $this->checksum\n" );
 			
 			$id = $this->esu->createObject( $acl, $metadata, $data, $this->mimeType, $this->checksum );
 			if( $data != null ) {
@@ -186,7 +189,7 @@ class UploadHelper {
 			$this->appendChunks( $id );
 		
 		} catch( EsuException $e ) {
-			print "Failure: $e\n";
+			$this->trace( "Failure: $e\n" );
 			$this->fail( $e );
 			return null;	
 		}
@@ -210,7 +213,8 @@ class UploadHelper {
 	 */
 	public function createObjectFromStreamOnPath( $path, $fd, $acl = null, $metadata = null, 
 		$closeStream = true ) {
-			
+
+		$this->startTime = time();
 		$this->currentBytes = 0;
 		$this->complete = false;
 		$this->failed = false;
@@ -226,8 +230,8 @@ class UploadHelper {
 		
 		// First call should be to create object
 		try {
+			$this->progress( 0 );
 			$data = $this->readChunk();
-			
 			$id = $this->esu->createObjectOnPath( $path, $acl, $metadata, $data, $this->mimeType, $this->checksum );
 			if( $data != null ) {
 				$this->progress( strlen( $data ) );
@@ -280,7 +284,8 @@ class UploadHelper {
 	 */
 	public function updateObjectFromStream( $id, $fd, $acl = null, $metadata = null,
 		$closeStream = true ) {
-			
+
+		$this->startTime = time();
 		$this->currentBytes = 0;
 		$this->complete = false;
 		$this->failed = false;
@@ -294,6 +299,7 @@ class UploadHelper {
 		
 		// The first call doesn't have extent so we truncate the remote file
 		try {
+  			$this->progress( 0 );
 			$data = $this->readChunk();
 			$this->esu->updateObject( $id, $acl, $metadata, null, $data, $this->mimeType, $this->checksum );
 			if( $data != null ) {
@@ -402,7 +408,7 @@ class UploadHelper {
 	private function appendChunks( $id ) {
 		while( ( $data = $this->readChunk() ) != null ) {
 			$extent = new Extent( $this->currentBytes, strlen( $data ) );
-			print "Extent: $extent\n";
+			$this->trace( "Extent: $extent\n" );
 			$this->esu->updateObject( $id, null, null, $extent, $data, $this->mimeType, $this->checksum );
 			$this->progress( strlen( $data ) );
 		}
@@ -423,6 +429,23 @@ class UploadHelper {
 		}
 		
 		return $data;
+	}
+	
+	/** 
+	 * Turns debug messages on and off.
+	 */
+	public function setDebug( $state ) {
+		$this->debug = $state;
+	}
+
+	/**
+	 * Used to output debug messages.
+	 */
+	private function trace( $str ) {
+		if( $this->debug ) {
+			echo $str;
+			echo "\n";
+		}
 	}
 	
 	/**
@@ -450,7 +473,7 @@ class UploadHelper {
 	private function progress( $bytes ) {
 		$this->currentBytes = bcadd( $this->currentBytes, $bytes );
 		if( $this->listener != null ) {
-			$this->listener->onProgress( $this->currentBytes, $this->bytesTotal );
+			$this->listener->onProgress( $this->currentBytes, $this->totalBytes, $this->startTime ); 
 		}
 	}
 	
@@ -483,7 +506,7 @@ class DownloadHelper {
 	private $esu;
 	private $buffSize;
 	const DEFAULT_BUFFSIZE = 4194304; // 4MB
-	
+	private $startTime;
 	private $currentBytes;
 	private $totalBytes;
 	private $complete;
@@ -494,7 +517,7 @@ class DownloadHelper {
 	private $listener;
 	private $checksum;
 	private $checksumming;
-	
+	private $debug = false;
 	
 	/**
 	 * Creates a new download helper.
@@ -529,6 +552,7 @@ class DownloadHelper {
 	 * the transfer is complete.  Defaults to true.
 	 */
 	public function readObjectToStream( $id, $stream, $closeStream = true ) {
+		$this->startTime = time();
 		$this->currentBytes = 0;
 		$this->complete = false;
 		$this->failed = false;
@@ -541,25 +565,33 @@ class DownloadHelper {
 		}
 		
 		// Get the file size.  Set to -1 if unknown.
-		$sMeta = $this->esu->getSystemMetadata( $id );
-		if( $sMeta->getMetadata( 'size' ) != null ) {
-			$size = $sMeta->getMetadata( 'size' )->getValue();
-			if( strlen( $size ) > 0 ) {
-				$this->totalBytes = $size;
+		try {
+			$sMeta = $this->esu->getSystemMetadata( $id );
+			if( $sMeta->getMetadata( 'size' ) != null ) {
+				$size = $sMeta->getMetadata( 'size' )->getValue();
+				if( strlen( $size ) > 0 ) {
+					$this->totalBytes = $size;
+				} else {
+					$this->totalBytes = -1;
+				}
 			} else {
 				$this->totalBytes = -1;
 			}
-		} else {
-			$this->totalBytes = -1;
+		} catch( EsuException $e ) {
+				$this->fail( $e );
+				throw $e;
 		}
 		
 		// We need to know how big the object is to download it.  Fail the
 		// transfer if we can't determine the object size.
 		if( $this->totalBytes == -1 ) {
-			throw new EsuException( "Failed to get object size" );
+			$e = new EsuException( "Failed to get object size" );
+			$this->fail( $e );
+			throw $e;
 		}
 		
 		// Loop, downloading chunks until the transfer is complete.
+		$this->progress( 0 );
 		while( true ) {
 			try {
 				$extent = null;
@@ -568,13 +600,14 @@ class DownloadHelper {
 				// request in the transfer, only request as many bytes as needed
 				// to get to the end of the file.  Use bcmath since these values
 				// can easily exceed 2GB.
-				if( bccomp( bcadd( $this->currentBytes, $this->buffSize ), $this->totalBytes ) > 0 ) {
-					// Would go past end of file.  Request less bytes.					
-					$extent = new Extent( $this->currentBytes, bcsub( $this->totalBytes, $this->currentBytes ) );
-				} else {
-					$extent = new Extent( $this->currentBytes, $this->buffSize );			
-				}
-				
+				if ($size > 0) {
+					if( bccomp( bcadd( $this->currentBytes, $this->buffSize ), $this->totalBytes ) > 0 ) {
+						// Would go past end of file.  Request less bytes.					
+						$extent = new Extent( $this->currentBytes, bcsub( $this->totalBytes, $this->currentBytes ) );
+					} else {
+						$extent = new Extent( $this->currentBytes, $this->buffSize );			
+					}
+				}				
 				// Read data from the server.
 				$data = $this->esu->readObject( $id, $extent, $this->checksum );
 				
@@ -675,7 +708,23 @@ class DownloadHelper {
 	/////////////////////
 	// Private methods //
 	/////////////////////
-	
+
+	/** 
+	 * Turns debug messages on and off.
+	 */
+	public function setDebug( $state ) {
+		$this->debug = $state;
+	}
+
+	/**
+	 * Used to output debug messages.
+	 */
+	private function trace( $str ) {
+		if( $this->debug ) {
+			echo $str;
+			echo "\n";
+		}
+	}
 	
 	/**
 	 * Updates progress on the current transfer and notifies the listener if
@@ -685,7 +734,7 @@ class DownloadHelper {
 	private function progress( $bytes ) {
 		$this->currentBytes = bcadd( $this->currentBytes, $bytes );
 		if( $this->listener != null ) {
-			$this->listener->onProgress( $this->currentBytes, $this->bytesTotal );
+      $this->listener->onProgress( $this->currentBytes, $this->totalBytes, $this->startTime );
 		}
 	}
 	
