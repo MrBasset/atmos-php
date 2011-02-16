@@ -1331,6 +1331,14 @@ class EsuRestApi implements EsuApi {
 		if( $this->followRedirects ) {
 			$req->setConfig('follow_redirects', true);
 		}
+		
+		// Some systems fail to verify the SSL certificate of
+		// accesspoint.atmosonline.com (e.g. Ubuntu Linux).  Disable certificate
+		// verification
+		$req->setConfig(array(
+			'ssl_verify_peer'       => FALSE,
+			'ssl_verify_host'       => FALSE
+		));
 
 		return $req;
 	}
