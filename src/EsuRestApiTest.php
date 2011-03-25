@@ -1,5 +1,5 @@
 <?php
-// Copyright � 2008, EMC Corporation.
+// Copyright © 2008, EMC Corporation.
 // Redistribution and use in source and binary forms, with or without modification, 
 // are permitted provided that the following conditions are met:
 //
@@ -41,21 +41,21 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	/**
 	 * UID to run tests with.  Change this value to your UID.
 	 */
-	private $uid = 'connectic';
+	private $uid = '<your uid>';
 	/**
 	 * Shared secret for UID.  Change this value to your UID's shared secret
 	 */
-	private $secret = 'D7qsp4j16PBHWSiUbc/bt3lbPBY=';
+	private $secret = '<your key>';
 	/**
 	 * Hostname or IP of ESU server.  Change this value to your server's
 	 * hostname or ip address.
 	 */
-	private $host = "192.168.15.115";
+	private $host = "accesspoint.atmosonline.com";
 	
 	/**
 	 * Port of ESU server (usually 80 or 443)
 	 */
-	private $port = 80;
+	private $port = 443;
 	
 	/**
 	 * If true, clean up objects created by the tests.
@@ -130,6 +130,28 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
 		$this->cleanup[] = $id;
 	}
+
+	/**
+	 * Test creating one empty object on a path.  No metadata, no content.
+	 */
+	public function testCreateObjectOnPathWithParens() {
+		$path = new ObjectPath( '/' . $this->random8() . "(" . $this->random8() . ")" );
+		
+		$id = $this->esu->createObjectOnPath( $path );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $id;
+	}
+	
+//	/**
+//	 * Test creating one empty object on a path.  No metadata, no content.
+//	 */
+//	public function testCreateObjectOnPathWithUnicode() {
+//		$path = new ObjectPath( '/' . $this->random8() . "спасибо" );
+//		
+//		$id = $this->esu->createObjectOnPath( $path );
+//		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+//		$this->cleanup[] = $id;
+//	}
 	
 	
 	/**

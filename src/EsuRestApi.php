@@ -1318,7 +1318,17 @@ class EsuRestApi implements EsuApi {
 		$url->setScheme( $this->proto );
 		$url->setHost( $this->host );
 		$url->setPort( $this->port );
-		$url->setPath( $resource );
+		
+		// URLEncode the resource
+		$newurl = "";
+		$parts = explode( "/", substr( $resource, 1 ) );
+		for( $i=0; $i<count($parts); $i++ ) {
+			$newurl .= '/' . rawurlencode($parts[$i]);
+		}
+		
+		$url->setPath( $newurl );
+		
+		
 		if( $query ) {
 			$url->setQuery( $query );
 		}
@@ -1401,7 +1411,10 @@ class EsuRestApi implements EsuApi {
 		
 		// Add the current date and the resource.
 		$hashStr .= $headers['Date'] . "\n";
-		$fullResource = $req->getUrl()->getPath();
+		
+		//$fullResource = $req->getUrl()->getPath();
+		$fullResource = $resource;
+		
 		if( $req->getUrl()->getQuery() != null ) {
 			$fullResource .= "?" . $req->getUrl()->getQuery();
 		}
@@ -1813,17 +1826,8 @@ class EsuRestApi implements EsuApi {
 		if( is_a( $id, "ObjectId" ) ) {
 			return $ctx . "/objects/" . $id;
 		} else if( is_a( $id, "ObjectPath" ) ) {
-			$str = $ctx . "/namespace";
-			$parts = split( "/", $id );
-			for( $i=0; $i<count($parts); $i++ ) {
-				if( $parts[$i] == "" ) continue;
-				$str .= '/' . urlencode( $parts[$i] );
-			}
-			if( $id->isDirectory() ) {
-				return $str . '/';
-			} else {
-				return $str;
-			}
+			$str = $ctx . "/namespace" . $id;
+			return $str;
 		} else {
 			throw new EsuException( 'invalid identifier type ' . get_class( $id ) );
 		}
