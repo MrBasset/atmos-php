@@ -105,7 +105,7 @@ class UploadHelper {
 	 * @return ObjectId the identifier of the newly-created object.
 	 */
 	public function createObjectFromFile( $file, $acl = null, $metadata = null ) {
-		$fd = fopen( $file, 'rb' );
+		$fd = @fopen( $file, 'rb' );
 		if( $fd === false ) {
 			throw new EsuException( 'Could not open file ' . $file );
 		}
@@ -128,7 +128,7 @@ class UploadHelper {
 	 * @return ObjectId the identifier of the newly-created object.
 	 */
 	public function createObjectFromFileOnPath( $path, $file, $acl = null, $metadata = null ) {
-		$fd = fopen( $file, 'rb' );
+		$fd = @fopen( $file, 'rb' );
 		if( $fd === false ) {
 			throw new EsuException( 'Could not open file ' . $file );
 		}
@@ -264,7 +264,7 @@ class UploadHelper {
 	 * Optional.  If null, no user metadata will be modified.
 	 */
 	public function updateObjectFromFile( $id, $file, $acl = null, $metadata = null ) {
-		$fd = fopen( $file, 'rb' );
+		$fd = @fopen( $file, 'rb' );
 		if( $fd === false ) {
 			throw new EsuException( 'Could not open file ' . $file );
 		}
@@ -537,7 +537,7 @@ class DownloadHelper {
 	 * @param string $file the file to write the object's contents to.
 	 */
 	public function readObjectToFile( $id, $file ) {
-		$stream = fopen( $file, "wb" );
+		$stream = @fopen( $file, "wb" );
 		if( $stream === false ) {
 			throw new EsuException( 'Could not open file ' . $file );
 		}
