@@ -258,11 +258,15 @@ class MetadataList {
 	 */
 	public function getMetadata( $index_or_name ) {
 		if( is_numeric( $index_or_name ) ) {
-			return $this->byindex[$index_or_name];
+			// Search by index
+			if ( isset( $this->byindex[$index_or_name] ) )
+				return $this->byindex[$index_or_name];
 		} else {
 			// Search by name
-			return $this->byname[$index_or_name];
+			if ( isset( $this->byname[$index_or_name] ) )
+				return $this->byname[$index_or_name];
 		}
+	return null;
 	}
 }
 
