@@ -44,10 +44,8 @@ class EsuRestApi implements EsuApi {
 	private $debug = false;
 	private $timeout = null;
 	private $followRedirects = false;
-	
 	private $context = "/rest";
 	private $proto;
-	
 	private static $ID_EXTRACTOR = "/[0-9a-zA-Z]+/objects/([0-9a-f]{44})";
 	
 	/**
@@ -1597,8 +1595,8 @@ class EsuRestApi implements EsuApi {
 		if( $header == null ) {
 			return;
 		}
-		
-		$attrs = split( ",", $header );
+
+		$attrs = split( ", ", $header );
 		foreach( $attrs as $attr ) {
 			$nvpair = split( "=", $attr, 2 );
 			$name = $nvpair[0];
