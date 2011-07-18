@@ -42,8 +42,10 @@ class EsuRestApi implements EsuApi {
 	private $uid;
 	private $secret;
 	private $debug = false;
+	private $monitor = false;
 	private $timeout = null;
 	private $followRedirects = false;
+	private $userAgent = null;
 	private $context = "/rest";
 	private $proto;
 	private static $ID_EXTRACTOR = "/[0-9a-zA-Z]+/objects/([0-9a-f]{44})";
@@ -1165,6 +1167,13 @@ class EsuRestApi implements EsuApi {
 	}
 	
 	/**
+	 * Turns HTTP protocol monitoring on and off.
+	 */
+	public function setMonitor( $state ) {
+		$this->monitor = $state;
+	}
+
+	/**
 	 * Changes the context root.  By default, the REST services are located
 	 * at /rest.  If you've modified the server configuration or are using
 	 * a proxy and need to change the context, use this method.
@@ -1197,7 +1206,14 @@ class EsuRestApi implements EsuApi {
 	public function setFollowRedirects($follow, $maxRedirects = 5) {
 		$this->followRedirects = $follow;
 	}
-	
+
+	/**
+	 * Set the HTTP User Agent.
+	 */
+	public function setUserAgent( $userAgent ) {
+		$this->userAgent = $userAgent;
+	}
+
 	/**
      * Renames a file or directory within the namespace.
      * @param ObjectPath $source The file or directory to rename
@@ -1347,7 +1363,14 @@ class EsuRestApi implements EsuApi {
 			'ssl_verify_peer'       => FALSE,
 			'ssl_verify_host'       => FALSE
 		));
-
+		if ( $this->userAgent ) {
+	        $req->setHeader( 'user-agent', $this->userAgent );
+		}
+		if ( $this->monitor ) {
+			require_once 'HTTP/Request2/Observer/Log.php';
+			$observer = new HTTP_Request2_Observer_Log();
+			$req->attach($observer);
+		}
 		return $req;
 	}
 	
