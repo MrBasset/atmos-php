@@ -280,7 +280,7 @@ class SHA0 {
 		if( $final_size > $end_offset ) {
 			if( $final_size < SHA0::BLOCK_SIZE ) {
 				// Pad it out
-				$final_block = str_pad( $final_block, SHA0::BLOCK_SIZE-$final_size, chr(0x0) );
+				$final_block = str_pad( $final_block, SHA0::BLOCK_SIZE, chr(0x0) );
 			}
 			$this->internal_hash_update( $final_block );
 			$final_block = "" . str_pad( "", SHA0::BLOCK_SIZE-8, chr(0x0) );
