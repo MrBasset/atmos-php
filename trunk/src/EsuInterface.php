@@ -1,6 +1,6 @@
 <?php
-// Copyright © 2008, EMC Corporation.
-// Redistribution and use in source and binary forms, with or without modification, 
+// Copyright © 2008 - 2011 EMC Corporation.
+// Redistribution and use in source and binary forms, with or without modification,
 // are permitted provided that the following conditions are met:
 //
 //     + Redistributions of source code must retain the above copyright notice, 
@@ -40,9 +40,9 @@ interface EsuApi {
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
 	 * @param Checksum $checksum if not null, use the Checksum object to compute
-     * the checksum for the create object request.  If appending
-     * to the object with subsequent requests, use the same
-     * checksum object for each request.
+	 * the checksum for the create object request.  If appending
+	 * to the object with subsequent requests, use the same
+	 * checksum object for each request.
 	 * @return ObjectId Identifier of the newly created object.
 	 * @throws EsuException if the request fails.
 	 */
@@ -84,9 +84,9 @@ interface EsuApi {
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
 	 * @param Checksum $checksum if not null, use the Checksum object to compute
-     * the checksum for the update object request.  If appending
-     * to the object with subsequent requests, use the same
-     * checksum object for each request.
+	 * the checksum for the update object request.  If appending
+	 * to the object with subsequent requests, use the same
+	 * checksum object for each request.
 	 * @throws EsuException if the request fails.
 	 */
 	public function updateObject( $id, $acl = null, $metadata = null, 
@@ -124,10 +124,10 @@ interface EsuApi {
 	 * @param Extent $extent the portion of the object data to read.  Optional.
 	 * Default is null to read the entire object.
 	 * @param Checksum $checksum if not null, the given checksum object will be used
-     * to verify checksums during the read operation.  Note that only erasure coded objects 
-     * will return checksums *and* if you're reading the object in chunks, you'll have to 
-     * read the data back sequentially to keep the checksum consistent.  If the read operation 
-     * does not return a checksum from the server, the checksum operation will be skipped.
+	 * to verify checksums during the read operation.  Note that only erasure coded objects
+	 * will return checksums *and* if you're reading the object in chunks, you'll have to
+	 * read the data back sequentially to keep the checksum consistent.  If the read operation
+	 * does not return a checksum from the server, the checksum operation will be skipped.
 	 * @return string the object data read.
 	 */
 	public function readObject( $id, $extent = null, $checksum = null );
@@ -139,20 +139,20 @@ interface EsuApi {
 	 */
 	public function getAcl( $id );
 	
-    /**
-     * Writes the metadata into the object. If the tag does not exist, it is 
-     * created and set to the corresponding value. If the tag exists, the 
-     * existing value is replaced.
-     * @param ObjectId $id the identifier of the object to update
-     * @param MetadataList $metadata metadata to write to the object.
-     */
+	/**
+	 * Writes the metadata into the object. If the tag does not exist, it is
+	 * created and set to the corresponding value. If the tag exists, the
+	 * existing value is replaced.
+	 * @param ObjectId $id the identifier of the object to update
+	 * @param MetadataList $metadata metadata to write to the object.
+	 */
 	public function setUserMetadata( $id, $metadata );
 	
-    /**
-     * Sets (overwrites) the ACL on the object.
-     * @param ObjectId $id the identifier of the object to change the ACL on.
-     * @param Acl $acl the new ACL for the object.
-     */
+	/**
+	 * Sets (overwrites) the ACL on the object.
+	 * @param ObjectId $id the identifier of the object to change the ACL on.
+	 * @param Acl $acl the new ACL for the object.
+	 */
 	public function setAcl( $id, $acl );
 	
 	/**
@@ -180,7 +180,7 @@ interface EsuApi {
 	
 	/**
 	 * Restores content from a version to the base object (i.e. "promote" an 
-     * old version to the current version)
+	 * old version to the current version)
 	 * @param ObjectId $id Base object ID (target of the restore)
 	 * @param ObjectId $vId Version object ID to restore
 	 */
@@ -229,64 +229,64 @@ interface EsuApi {
 	 */
 	public function queryObjects( $xquery );
 	
-    /**
-     * Lists the contents of a directory.
-     * @param Identifier $id the identifier of the directory object to list.
-     * @return array the directory entries in the directory.
-     */
-    public function listDirectory( $id );
+	/**
+	 * Lists the contents of a directory.
+	 * @param Identifier $id the identifier of the directory object to list.
+	 * @return array the directory entries in the directory.
+	 */
+	public function listDirectory( $id );
     
-    /**
-     * An Atmos user (UID) can construct a pre-authenticated URL to an 
-     * object, which may then be used by anyone to retrieve the 
-     * object (e.g., through a browser). This allows an Atmos user 
-     * to let a non-Atmos user download a specific object. The 
-     * entire object/file is read.
-     * @param Identifier $id the object to generate the URL for
-     * @param int $expiration the expiration date of the URL (in unix time)
-     * @return string a URL that can be used to share the object's content
-     */
-    public function getShareableUrl( $id, $expiration );
+	/**
+	 * An Atmos user (UID) can construct a pre-authenticated URL to an
+	 * object, which may then be used by anyone to retrieve the
+	 * object (e.g., through a browser). This allows an Atmos user
+	 * to let a non-Atmos user download a specific object. The
+	 * entire object/file is read.
+	 * @param Identifier $id the object to generate the URL for
+	 * @param int $expiration the expiration date of the URL (in unix time)
+	 * @return string a URL that can be used to share the object's content
+	 */
+	public function getShareableUrl( $id, $expiration );
     
-    /**
-     * Returns all of an object's metadata and its ACL in
-     * one call.
-     * @param $id the object's identifier.
-     * @return ObjectMetadata the object's metadata
-     */
-    public function getAllMetadata( $id );
+	/**
+	 * Returns all of an object's metadata and its ACL in
+	 * one call.
+	 * @param $id the object's identifier.
+	 * @return ObjectMetadata the object's metadata
+	 */
+	public function getAllMetadata( $id );
     
-    /**
-     * Renames a file or directory within the namespace.
-     * @param ObjectPath $source The file or directory to rename
-     * @param ObjectPath $destination The new path for the file or directory
-     * @param ObjectPath $force If true, the desination file or 
-     * directory will be overwritten.  Directories must be empty to be 
-     * overwritten.  Also note that overwrite operations on files are
-     * not synchronous; a delay may be required before the object is
-     * available at its destination.
-     */
-    public function rename( $source, $destination, $force );
+	/**
+	 * Renames a file or directory within the namespace.
+	 * @param ObjectPath $source The file or directory to rename
+	 * @param ObjectPath $destination The new path for the file or directory
+	 * @param ObjectPath $force If true, the desination file or
+	 * directory will be overwritten.  Directories must be empty to be
+	 * overwritten.  Also note that overwrite operations on files are
+	 * not synchronous; a delay may be required before the object is
+	 * available at its destination.
+	 */
+	public function rename( $source, $destination, $force );
 
-    /**
-     * Gets information about the web service.  Currently, this only includes
-     * the version of Atmos.
-     * @return ServiceInformation the service information object.
-     */
-    public function getServiceInformation();
+	/**
+	 * Gets information about the web service.  Currently, this only includes
+	 * the version of Atmos.
+	 * @return ServiceInformation the service information object.
+	 */
+	public function getServiceInformation();
 
-    /**
-     * Returns the Atmos protocol information 
+	/**
+	 * Returns the Atmos protocol information
 	 * @param $protocolInfo
-     */
+	 */
 	public function getProtocolInformation( &$protocolInfo );
     
-    /**
-     * Gets information about an object including its replicas,
-     * retention, and expiration information.
-     * @param Identifier $id The object to get information about.
-     * @return ObjectInfo information about the object
-     */
-    public function getObjectInfo( $id );
+	/**
+	 * Gets information about an object including its replicas,
+	 * retention, and expiration information.
+	 * @param Identifier $id The object to get information about.
+	 * @return ObjectInfo information about the object
+	 */
+	public function getObjectInfo( $id );
 }
 ?>
