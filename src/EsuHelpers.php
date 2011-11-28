@@ -1,6 +1,6 @@
 <?php
-// Copyright © 2008, EMC Corporation.
-// Redistribution and use in source and binary forms, with or without modification, 
+// Copyright © 2008 - 2011 EMC Corporation.
+// Redistribution and use in source and binary forms, with or without modification,
 // are permitted provided that the following conditions are met:
 //
 //     + Redistributions of source code must retain the above copyright notice, 
@@ -33,25 +33,36 @@
 interface ProgressListener {
 	/**
 	 * This method will be called after a chunk has been transferred.
-	 * @param string $currentBytes the number of bytes transferred.  Note that
-	 * the value will be passed as a string since it may be >2GB.
-	 * @param string $totalBytes the total number of bytes to transfer.  If
-	 * the total number of bytes is unknown, this value will be -1.  Note that
-	 * the value will be passed as a string since it may be >2GB.
+	 * @param int $flags     the progress flags.
+	 * @param string         $currentBytes the number of bytes transferred.
+	 *    Note that the value will be passed as a string since it may be >2GB.
+	 * @param string         $totalBytes the total number of bytes to transfer.
+	 *    If the total number of bytes is unknown, this value will be -1.  Note
+	 *    that the value will be passed as a string since it may be >2GB.
 	 */
-	public function onProgress( $currentBytes, $totalBytes, $startTime );
+	public function onProgress( $flags = 0, $currentBytes, $totalBytes, $startTime );
 	
 	/**
-	 * This callback will be invoked after the transfer has completed.
+	 * Provides notification about internal state information.
+	 * @param int $flags         the progress flags.
+	 * @param string $key        the keyname.
+	 * @param string $value      the new value.
 	 */
-	public function onComplete();
+	public function onInform( $flags = 0, $key, $value );
+
+	/**
+	 * This callback will be invoked after the transfer has completed.
+	 * @param int $flags         the completion flags.
+	 */
+	public function onComplete( $flags = 0 );
 	
 	/**
 	 * This callback will be invoked if there is an error during the transfer.
-	 * @param Exception $exception the exception that caused the transfer to
-	 * fail.
+	 * @param int $flags             the completion flags.
+	 * @param Exception $exception   the exception that caused the transfer
+	 *    to fail.
 	 */
-	public function onError( $exception );
+	public function onError( $flags = 0, $exception );
 }
 
 
@@ -70,14 +81,14 @@ class UploadHelper {
 	private $currentBytes;
 	private $totalBytes;
 	private $complete;
-	private $failed;
+	private $failed = false;
 	private $error;
 	private $closeStream;
 	private $stream;
 	private $listener;
 	private $checksum;
-	private $computeChecksums;
-	private $mimeType;
+	private $computeChecksums = false;
+	private $mimeType = 'application/octet-stream';
 	private $debug = false;
 	
 	/**
@@ -90,8 +101,6 @@ class UploadHelper {
 	public function __construct( $esuApi, $buffSize = UploadHelper::DEFAULT_BUFFSIZE ) {
 		$this->esu = $esuApi;
 		$this->buffSize = $buffSize;
-		$this->computeChecksums = false;
-		$this->mimeType = "application/octet-stream";
 	}
 	
 	/**
@@ -164,24 +173,24 @@ class UploadHelper {
 		$this->stream = $fd;
 		
 		if( $this->computeChecksums ) {
-			$this->checksum = new Checksum( "SHA0" );	
-		}	
+			$this->checksum = new Checksum( "SHA0" );
+		}
 			
 		$id = null;
-		
+
 		// First call should be to create object
 		try {
 			$this->progress( 0 );
 			$data = $this->readChunk();
 			$this->trace( "Creating object with initial chunk of " . strlen( $data ) . " bytes\n" );
 			$this->trace( "Checksum: $this->checksum\n" );
-			
 			$id = $this->esu->createObject( $acl, $metadata, $data, $this->mimeType, $this->checksum );
+			$this->inform( 0, 'objectId', "$id" );
 			if( $data != null ) {
 				$this->progress( strlen( $data ) );
 			} else {
 				// No data in file? Complete
-				$this->complete();
+				$this->complete( 0 );
 				return $id;
 			}
 			
@@ -222,22 +231,24 @@ class UploadHelper {
 		$this->closeStream = $closeStream;
 		$this->stream = $fd;
 		
-		if( $this->computeChecksums ) {
-			$this->checksum = new Checksum( "SHA0" );	
-		}	
+ 		if( $this->computeChecksums ) {
+			$this->checksum = new Checksum( "SHA0" );
+		}
 			
+		$this->inform( 0, 'objectName', "$path" );
 		$id = null;
-		
+
 		// First call should be to create object
 		try {
 			$this->progress( 0 );
 			$data = $this->readChunk();
 			$id = $this->esu->createObjectOnPath( $path, $acl, $metadata, $data, $this->mimeType, $this->checksum );
+			$this->inform( 0, 'objectId', "$id" );
 			if( $data != null ) {
 				$this->progress( strlen( $data ) );
 			} else {
 				// No data in file? Complete
-				$this->complete();
+				$this->complete( 0 );
 				return $id;
 			}
 			
@@ -294,8 +305,8 @@ class UploadHelper {
 		$this->stream = $fd;
 		
 		if( $this->computeChecksums ) {
-			$this->checksum = new Checksum( "SHA0" );	
-		}	
+			$this->checksum = new Checksum( "SHA0" );
+		}
 		
 		// The first call doesn't have extent so we truncate the remote file
 		try {
@@ -306,7 +317,7 @@ class UploadHelper {
 				$this->progress( strlen( $data ) );
 			} else {
 				// No data in file? Complete
-				$this->complete();
+				$this->complete( 0 );
 				return $id;
 			}
 			
@@ -398,6 +409,13 @@ class UploadHelper {
 		return $this->mimeType;
 	}
 	
+	/**
+	 * Turns debug messages on and off.
+	 */
+	public function setDebug( $state ) {
+		$this->debug = $state;
+	}
+
 	/////////////////////
 	// Private methods //
 	/////////////////////
@@ -407,12 +425,14 @@ class UploadHelper {
 	 */
 	private function appendChunks( $id ) {
 		while( ( $data = $this->readChunk() ) != null ) {
+
 			$extent = new Extent( $this->currentBytes, strlen( $data ) );
 			$this->trace( "Extent: $extent\n" );
 			$this->esu->updateObject( $id, null, null, $extent, $data, $this->mimeType, $this->checksum );
+			unset( $extent );
 			$this->progress( strlen( $data ) );
 		}
-		$this->complete();
+		$this->complete( 0 );
 	}
 	
 	/**
@@ -431,13 +451,6 @@ class UploadHelper {
 		return $data;
 	}
 	
-	/** 
-	 * Turns debug messages on and off.
-	 */
-	public function setDebug( $state ) {
-		$this->debug = $state;
-	}
-
 	/**
 	 * Used to output debug messages.
 	 */
@@ -449,52 +462,67 @@ class UploadHelper {
 	}
 	
 	/**
-	 * Fails the current transfer.  Sets the failed flag and notifies the 
-	 * listener if required.
-	 * @param Exception $exception the error that caused the transfer to fail.
-	 */
-	private function fail( $exception ) {
-		$this->failed = true;
-		$this->error = $exception;
-		if( $this->closeStream ) {
-			$success = fclose( $this->stream );
-			$this->stream = null;
-		}
-		if( $this->listener != null ) {
-			$this->listener->onError( $exception );
-		}
-	}
-	
-	/**
 	 * Updates progress on the current transfer and notifies the listener if
 	 * required.
-	 * @param integer $bytes the number of bytes transferred
+	 * @param integer $bytes     the number of bytes transferred.
 	 */
 	private function progress( $bytes ) {
 		$this->currentBytes = bcadd( $this->currentBytes, $bytes );
 		if( $this->listener != null ) {
-			$this->listener->onProgress( $this->currentBytes, $this->totalBytes, $this->startTime ); 
+			$this->listener->onProgress( 0, $this->currentBytes, $this->totalBytes, $this->startTime );
 		}
 	}
 	
 	/**
+	 * Provides notification about internal state information.
+	 * @param int $flags         the progress flags.
+	 * @param string $key        the keyname.
+	 * @param string $value      the new value.
+	 */
+	private function inform( $flags, $key, $value ) {
+		if( $this->listener != null ) {
+			$this->listener->onInform( $flags, $key, $value );
+		}
+	}
+
+	/**
 	 * Marks the current transfer as complete, closes the stream if required,
 	 * and notifies the listener.
+	 * @param int $flags         the completion flags.
 	 */
-	private function complete() {
-		$complete = true;
-		
+	private function complete( $flags ) {
+		$this->complete = true;
+
 		if( $this->closeStream ) {
 			fclose( $this->stream );
 			$this->stream = null;
 		}
 		
 		if( $this->listener != null ) {
-			$this->listener->onComplete();
+			$this->listener->onComplete( $flags );
 		}
 	}
 	
-}
+	/**
+	 * Fails the current transfer.  Sets the failed flag and notifies the
+	 * listener if required.
+	 * @param Exception $exception      the failure information.
+	 */
+	private function fail( $exception ) {
+		$this->failed = true;
+		$this->error = $exception;
+
+		if( $this->closeStream ) {
+			fclose( $this->stream );
+			$this->stream = null;
+		}
+		if( $this->listener != null ) {
+			$this->listener->onError( 0, $exception );
+		}
+	}
+
+} // class UploadHelper
+
 
 /**
  * Helper class to download objects.  For large transfers, the content
@@ -608,7 +636,7 @@ class DownloadHelper {
 						$extent = new Extent( $this->currentBytes, $this->buffSize );			
 					}
 				}				
-				// Read data from the server.
+				// Read data from the server
 				$data = $this->esu->readObject( $id, $extent, $this->checksum );
 				
 				// Write to the stream
@@ -617,16 +645,22 @@ class DownloadHelper {
 				// Update progress
 				$this->progress( strlen( $data ) );
 				
-				// See if we're done.
+				// See if we're done
 				if( $this->currentBytes == $this->totalBytes ) {
 					if( $this->checksumming ) {
-						if( $this->checksum->getExpectedValue() != "".$this->checksum ) {
-							$this->fail( new EsuException( "Checksum failed, expected " . 
-								$this->checksum->getExpectedValue() . " but got $this->checksum" ) );
+						if( $this->checksum->getExpectedValue() === null ) {
+							$this->fail( new EsuException( "Missing checksum (should be \"$this->checksum\")") );
+						} else if( $this->checksum->getExpectedValue() != "".$this->checksum ) {
+							$this->fail( new EsuException( 'Checksum failed (expected "' . $this->checksum->getExpectedValue() . "\" but got \"$this->checksum\")" ) );
 						}
+						else {
+							$this->complete( CLOUD_STORAGE_LISTENER_CHECKSUM_PASSED ); // Successful download, passed checksum
+						}
+						return;
 					}
-					
-					$this->complete();
+
+			      // Successful download
+					$this->complete( 0 );
 					return;
 				}
 			} catch( EsuException $e ) {
@@ -635,7 +669,7 @@ class DownloadHelper {
 			}
 		}
 	}
-	
+
 	/**
 	 * Gets the current number of bytes that have been downloaded.  Note that
 	 * the value returned is a string and not an integer since it may be
@@ -704,17 +738,16 @@ class DownloadHelper {
 		return $this->checksumming;
 	}
 	
-	
-	/////////////////////
-	// Private methods //
-	/////////////////////
-
-	/** 
+	/**
 	 * Turns debug messages on and off.
 	 */
 	public function setDebug( $state ) {
 		$this->debug = $state;
 	}
+
+	/////////////////////
+	// Private methods //
+	/////////////////////
 
 	/**
 	 * Used to output debug messages.
@@ -729,20 +762,33 @@ class DownloadHelper {
 	/**
 	 * Updates progress on the current transfer and notifies the listener if
 	 * required.
-	 * @param integer $bytes the number of bytes transferred
+	 * @param integer $bytes     the number of bytes transferred.
 	 */
 	private function progress( $bytes ) {
 		$this->currentBytes = bcadd( $this->currentBytes, $bytes );
 		if( $this->listener != null ) {
-      $this->listener->onProgress( $this->currentBytes, $this->totalBytes, $this->startTime );
+			$this->listener->onProgress( 0, $this->currentBytes, $this->totalBytes, $this->startTime );
 		}
 	}
 	
 	/**
+	 * Provides notification about internal state information.
+	 * @param int $flags         the progress flags.
+	 * @param string $key        the keyname.
+	 * @param string $value      the new value.
+	 */
+	private function inform( $flags, $key, $value ) {
+		if( $this->listener != null ) {
+			$this->listener->onInform( $flags, $key, $value );
+		}
+	}
+
+	/**
 	 * Marks the current transfer as complete, closes the stream if required,
 	 * and notifies the listener.
+	 * @param int $flags         the completion flags.
 	 */
-	private function complete() {
+	private function complete( $flags ) {
 		$this->complete = true;
 		
 		if( $this->closeStream ) {
@@ -751,29 +797,29 @@ class DownloadHelper {
 		}
 		
 		if( $this->listener != null ) {
-			$this->listener->onComplete();
+			$this->listener->onComplete( $flags );
 		}
 	}
 	
 	/**
-	 * Fails the current transfer.  Sets the failed flag and notifies the 
+	 * Fails the current transfer.  Sets the failed flag and notifies the
 	 * listener if required.
-	 * @param Exception $exception the error that caused the transfer to fail.
+	 * @param Exception $exception      the failure information.
 	 */
-	private function fail( $e ) {
+	private function fail( $exception ) {
 		$this->failed = true;
-		$this->error = $e;
+		$this->error = $exception;
+
 		if( $this->closeStream ) {
 			fclose( $this->stream );
 			$this->stream = null;
 		}
 		if( $this->listener != null ) {
-			$this->listener->onError( $e );
+			$this->listener->onError( 0, $exception );
 		}
 		
 	}
 	
-	
-}
+} // class DownloadHelper
 
 ?>

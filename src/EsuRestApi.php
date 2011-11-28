@@ -1,5 +1,5 @@
 <?php
-// Copyright © 2008, EMC Corporation.
+// Copyright © 2008 - 2011 EMC Corporation.
 // Redistribution and use in source and binary forms, with or without modification, 
 // are permitted provided that the following conditions are met:
 //
@@ -48,8 +48,8 @@ class EsuRestApi implements EsuApi {
 	private $userAgent = null;
 	private $context = "/rest";
 	private $proto;
-	private static $ID_EXTRACTOR = "/[0-9a-zA-Z]+/objects/([0-9a-f]{44})";
-	
+	private static $ID_EXTRACTOR = '/\/[0-9a-zA-Z]+\/objects\/([0-9a-f]{44})/';
+
 	/**
 	 * Creates a new EsuRestApi object.
 	 * @param string $host the hostname or IP address of the ESU server
@@ -84,9 +84,9 @@ class EsuRestApi implements EsuApi {
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
 	 * @param Checksum $checksum if not null, use the Checksum object to compute
-     * the checksum for the create object request.  If appending
-     * to the object with subsequent requests, use the same
-     * checksum object for each request.
+	 * the checksum for the create object request.  If appending
+	 * to the object with subsequent requests, use the same
+	 * checksum object for each request.
 	 * @return ObjectId Identifier of the newly created object.
 	 * @throws EsuException if the request fails.
 	 */
@@ -133,7 +133,7 @@ class EsuRestApi implements EsuApi {
 		if( $checksum != null ) {
 			if( $data != null ) {
 				$checksum->update( $data );
-			} 
+			}
 			$headers["x-emc-wschecksum"] = "".$checksum;
 		}
 		
@@ -157,7 +157,7 @@ class EsuRestApi implements EsuApi {
 		$location = $response->getHeader( "location" );
 		$pos = array();
 		// Parse the value out of the URL
-		ereg( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
+		preg_match( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
 		$this->trace( "Location: " . $location );
 		$this->trace( "regex: " . EsuRestApi::$ID_EXTRACTOR );
 		$this->trace( "pos 1 " . $pos[1] );
@@ -178,9 +178,9 @@ class EsuRestApi implements EsuApi {
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
 	 * @param Checksum $checksum if not null, use the Checksum object to compute
-     * the checksum for the create object request.  If appending
-     * to the object with subsequent requests, use the same
-     * checksum object for each request.
+	 * the checksum for the create object request.  If appending
+	 * to the object with subsequent requests, use the same
+	 * checksum object for each request.
 	 * @return ObjectId The ObjectId of the newly created object
 	 * @throws EsuException if the request fails.
 	 */
@@ -227,7 +227,7 @@ class EsuRestApi implements EsuApi {
 		if( $checksum != null ) {
 			if( $data != null ) {
 				$checksum->update( $data );
-			} 
+			}
 			$headers["x-emc-wschecksum"] = "".$checksum;
 		}
 		
@@ -252,7 +252,7 @@ class EsuRestApi implements EsuApi {
 		$location = $response->getHeader( "location" );
 		$pos = array();
 		// Parse the value out of the URL
-		ereg( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
+		preg_match( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
 		$this->trace( "Location: " . $location );
 		$this->trace( "regex: " . EsuRestApi::$ID_EXTRACTOR );
 		$this->trace( "pos 1 " . $pos[1] );
@@ -337,10 +337,10 @@ class EsuRestApi implements EsuApi {
 	 * @param Extent $extent the portion of the object data to read.  Optional.
 	 * Default is null to read the entire object.
 	 * @param Checksum $checksum if not null, the given checksum object will be used
-     * to verify checksums during the read operation.  Note that only erasure coded objects 
-     * will return checksums *and* if you're reading the object in chunks, you'll have to 
-     * read the data back sequentially to keep the checksum consistent.  If the read operation 
-     * does not return a checksum from the server, the checksum operation will be skipped.
+	 * to verify checksums during the read operation.  Note that only erasure coded objects
+	 * will return checksums *and* if you're reading the object in chunks, you'll have to
+	 * read the data back sequentially to keep the checksum consistent.  If the read operation
+	 * does not return a checksum from the server, the checksum operation will be skipped.
 	 * @return string the object data read.
 	 */
 	public function readObject( $id, $extent = null, $checksum = null ) {
@@ -374,7 +374,7 @@ class EsuRestApi implements EsuApi {
 		}
 			
 		// The requested content is in the response body.
-		$body = &$response->getBody();
+		$body = $response->getBody();
 		if( $checksum ) {
 			// Update checksum
 			$checksum->setExpectedValue( $response->getHeader( "x-emc-wschecksum" ) );
@@ -521,7 +521,7 @@ class EsuRestApi implements EsuApi {
 		// Get the ID of the new version out of the location header.
 		$location = $response->getHeader( "location" );
 		$pos = array();
-		ereg( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
+		preg_match( EsuRestApi::$ID_EXTRACTOR, $location, $pos );
 		$this->trace( "Location: " . $location );
 		
 		return new ObjectId( $pos[1] );
@@ -529,7 +529,7 @@ class EsuRestApi implements EsuApi {
 	
 	/**
 	 * Restores content from a version to the base object (i.e. "promote" an 
-     * old version to the current version)
+	 * old version to the current version)
 	 * @param ObjectId $id Base object ID (target of the restore)
 	 * @param ObjectId $vId Version object ID to restore
 	 */
@@ -598,9 +598,8 @@ class EsuRestApi implements EsuApi {
 		$meta = new MetadataList();
 		$this->readMetadata( $meta, $response->getHeader( "x-emc-meta" ), false );		
 		$this->readMetadata( $meta, $response->getHeader( "x-emc-listable-meta" ), true );
-		
+
 		return $meta;
-		
 	}
 	
 	/**
@@ -847,9 +846,9 @@ class EsuRestApi implements EsuApi {
 	 * may be null.  If $data is non-null and $mimeType is null, the MIME
 	 * type will default to application/octet-stream.
 	 * @param Checksum $checksum if not null, use the Checksum object to compute
-     * the checksum for the update object request.  If appending
-     * to the object with subsequent requests, use the same
-     * checksum object for each request.
+	 * the checksum for the update object request.  If appending
+	 * to the object with subsequent requests, use the same
+	 * checksum object for each request.
 	 * @throws EsuException if the request fails.
 	 */
 	public function updateObject( $id, $acl = null, $metadata = null, 
@@ -861,10 +860,11 @@ class EsuRestApi implements EsuApi {
 		$headers = array();
 		
 		if( $mimeType == null && $data != null ) {
-			$mimeType = "application/octet-stream";
+			$mimeType = 'application/octet-stream';
 		}
-		$headers["Content-Type"] = $mimeType;
-		
+		if (! empty($mimeType)) {
+			$headers["Content-Type"] = $mimeType;
+		}
 		$headers["x-emc-uid"] = $this->uid;
 		
 		// Process metadata
@@ -906,7 +906,8 @@ class EsuRestApi implements EsuApi {
 		if( $checksum != null ) {
 			if( $data != null ) {
 				$checksum->update( $data );
-			} 
+			}
+
 			$headers["x-emc-wschecksum"] = "".$checksum;
 		}
 		
@@ -929,12 +930,12 @@ class EsuRestApi implements EsuApi {
 	}
 	
 	/**
-     * Writes the metadata into the object. If the tag does not exist, it is 
-     * created and set to the corresponding value. If the tag exists, the 
-     * existing value is replaced.
-     * @param Identifier $id the identifier of the object to update
-     * @param MetadataList $metadata metadata to write to the object.
-     */
+	 * Writes the metadata into the object. If the tag does not exist, it is
+	 * created and set to the corresponding value. If the tag exists, the
+	 * existing value is replaced.
+	 * @param Identifier $id the identifier of the object to update
+	 * @param MetadataList $metadata metadata to write to the object.
+	 */
 	public function setUserMetadata( $id, $metadata ) {
 		$resource = $this->getResourcePath( $this->context, $id );
 		$req = $this->buildRequest( $resource, "metadata/user" );
@@ -966,11 +967,11 @@ class EsuRestApi implements EsuApi {
 
 	}
 	
-    /**
-     * Sets (overwrites) the ACL on the object.
-     * @param Identifier $id the identifier of the object to change the ACL on.
-     * @param Acl $acl the new ACL for the object.
-     */
+	/**
+	 * Sets (overwrites) the ACL on the object.
+	 * @param Identifier $id the identifier of the object to change the ACL on.
+	 * @param Acl $acl the new ACL for the object.
+	 */
 	public function setAcl( $id, $acl ) {
 		$resource = $this->getResourcePath( $this->context, $id );
 		$req = $this->buildRequest( $resource, "acl" );
@@ -1003,19 +1004,19 @@ class EsuRestApi implements EsuApi {
 	}
 	
 	/**
-     * Lists the contents of a directory.
-     * @param Identifier $id the identifier of the directory object to list.
-     * @return array the directory entries in the directory.
-     */
-    public function listDirectory( $id ) {
-    	$namespace = is_a( $id, "ObjectPath" ) ? true : false; 
+	 * Lists the contents of a directory.
+	 * @param Identifier $id the identifier of the directory object to list.
+	 * @return array the directory entries in the directory.
+	 */
+	public function listDirectory( $id ) {
+		$namespace = is_a( $id, "ObjectPath" ) ? true : false;
     	
-    	// fetch the directory's content as a blob
-    	$data = $this->readObject( $id );
+	    	// fetch the directory's content as a blob
+    		$data = $this->readObject( $id );
 		$this->trace( $data );
-    	$objs = array();
+	    	$objs = array();
     	
-    	// Parse the XML
+    		// Parse the XML
 		$dom = new DOMDocument( );
 		$parseOk = false;
 		
@@ -1067,66 +1068,64 @@ class EsuRestApi implements EsuApi {
 		}
 		return $objs;
     	
-    }
+	}
     
-    /**
-     * An Atmos user (UID) can construct a pre-authenticated URL to an 
-     * object, which may then be used by anyone to retrieve the 
-     * object (e.g., through a browser). This allows an Atmos user 
-     * to let a non-Atmos user download a specific object. The 
-     * entire object/file is read.
-     * @param Identifier $id the object to generate the URL for
-     * @param int $expiration the expiration date of the URL (in unix time)
-     * @return string a URL that can be used to share the object's content
-     */
-    public function getShareableUrl( $id, $expiration ) {
+	/**
+	 * An Atmos user (UID) can construct a pre-authenticated URL to an
+	 * object, which may then be used by anyone to retrieve the
+	 * object (e.g., through a browser). This allows an Atmos user
+	 * to let a non-Atmos user download a specific object. The
+	 * entire object/file is read.
+	 * @param Identifier $id the object to generate the URL for
+	 * @param int $expiration the expiration date of the URL (in unix time)
+	 * @return string a URL that can be used to share the object's content
+	 */
+	public function getShareableUrl( $id, $expiration ) {
    		$resource = $this->getResourcePath( $this->context, $id );
-        $uidEnc = urlencode( $this->uid );
+        	$uidEnc = urlencode( $this->uid );
             
-        $sb = "GET\n";
-        $sb .= strtolower( $resource ) . "\n";
-        $sb .= $this->uid . "\n";
-        $sb .= $expiration;
+	        $sb = "GET\n";
+        	$sb .= strtolower( $resource ) . "\n";
+	        $sb .= $this->uid . "\n";
+        	$sb .= $expiration;
             
-        $signature = $this->sign( $sb );
-        $resource .= "?uid=" . $uidEnc . "&expires=" . $expiration .
+	        $signature = $this->sign( $sb );
+        	$resource .= "?uid=" . $uidEnc . "&expires=" . $expiration .
                 "&signature=" . urlencode( $signature );
             
-        $url = $this->proto . "://" . $this->host . ":" . $this->port . 
-			$resource;
-        
-        return $url;
-    }
+	        $url = $this->proto . "://" . $this->host . ":" . $this->port . $resource;
+		return $url;
+	}
 
-    /**
-     * Returns the Atmos protocol information 
+	/**
+	 * Returns the Atmos protocol information
 	 * @param $protocolInfo
-     */
+	 */
 	public function getProtocolInformation( &$protocolInfo )
 		{
 		$protocolInfo['transportProtocol'] = $this->proto;
 		$protocolInfo['accessPoint'] = $this->host;
 		$protocolInfo['accessPort'] = $this->port;
-		$protocolInfo['accessPortProtocol'] = 'TCP/IP';
-        $protocolInfo['accessScheme'] = $this->proto . "://" . $this->host . ":" . $this->port; 
-        $protocolInfo['userId'] = $this->uid; 
+		$protocolInfo['accessPortProtocol'] = 'TCP';
+		$protocolInfo['accessScheme'] = $this->proto . "://" . $this->host . ":" . $this->port;
+		$protocolInfo['userId'] = $this->uid;
 		return;
 		}
 		
-    /**
-     * Returns all of an object's metadata and its ACL in
-     * one call.
-     * @param $id the object's identifier.
-     * @return ObjectMetadata the object's metadata
-     */
-    public function getAllMetadata( $id ) {
+	/**
+	 * Returns all of an object's metadata and its ACL in
+	 * one call.
+	 * @param $id the object's identifier.
+	 * @return ObjectMetadata the object's metadata
+	 */
+	public function getAllMetadata( $id ) {
 		$resource = $this->getResourcePath( $this->context, $id );
 		$req = $this->buildRequest( $resource, null );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
 		// Add date
 		$headers["Date"] = gmdate( 'r' );
-		
+
 		// Sign request
 		$this->signRequest( $req, "HEAD", $resource, $headers, null );
 		
@@ -1145,7 +1144,13 @@ class EsuRestApi implements EsuApi {
 		$meta = new MetadataList();
 		$this->readMetadata( $meta, $response->getHeader( "x-emc-meta" ), false );		
 		$this->readMetadata( $meta, $response->getHeader( "x-emc-listable-meta" ), true );
-		
+		$value = $response->getHeader( "content-type" );
+		if (! empty($value))
+			{ $m = new Metadata( 'contenttype', $value, false );  $meta->addMetadata( $m ); }
+		$value = $response->getHeader( "x-emc-wschecksum" );
+		if (! empty($value))
+			{ $m = new Metadata( 'checksum', $value, false );  $meta->addMetadata( $m ); }
+
 		// Parse return headers.  User grants are in x-emc-useracl and
 		// group grants are in x-emc-groupacl
 		$acl = new Acl();
@@ -1153,13 +1158,9 @@ class EsuRestApi implements EsuApi {
 		$this->readAcl( $acl, $response->getHeader( "x-emc-groupacl" ), Grantee::GROUP );
 		
 		return array( $meta, $acl );
-    }
+	}
 	
-	
-	
-
-
-	/** 
+	/**
 	 * Turns debug messages on and off.
 	 */
 	public function setDebug( $state ) {
@@ -1169,8 +1170,8 @@ class EsuRestApi implements EsuApi {
 	/**
 	 * Turns HTTP protocol monitoring on and off.
 	 */
-	public function setMonitor( $state ) {
-		$this->monitor = $state;
+	public function setMonitor( $observer ) {
+		$this->monitor = $observer;
 	}
 
 	/**
@@ -1215,17 +1216,17 @@ class EsuRestApi implements EsuApi {
 	}
 
 	/**
-     * Renames a file or directory within the namespace.
-     * @param ObjectPath $source The file or directory to rename
-     * @param ObjectPath $destination The new path for the file or directory
-     * @param ObjectPath $force If true, the desination file or 
-     * directory will be overwritten.  Directories must be empty to be 
-     * overwritten.  Also note that overwrite operations on files are
-     * not synchronous; a delay may be required before the object is
-     * available at its destination.
-     */
-    public function rename( $source, $destination, $force ) {
-    	$resource = $this->getResourcePath( $this->context, $source );
+	 * Renames a file or directory within the namespace.
+	 * @param ObjectPath $source The file or directory to rename
+	 * @param ObjectPath $destination The new path for the file or directory
+	 * @param ObjectPath $force If true, the desination file or
+	 * directory will be overwritten.  Directories must be empty to be
+	 * overwritten.  Also note that overwrite operations on files are
+	 * not synchronous; a delay may be required before the object is
+	 * available at its destination.
+	 */
+	public function rename( $source, $destination, $force ) {
+		$resource = $this->getResourcePath( $this->context, $source );
 		$req = $this->buildRequest( $resource, "rename" );
 		$headers = array();
 		$headers["x-emc-uid"] = $this->uid;
@@ -1233,16 +1234,16 @@ class EsuRestApi implements EsuApi {
 		$headers["Date"] = gmdate( 'r' );
 		
 		// Add the destination path
-        $destPath = "".$destination;
-        if ($destPath[0] == '/' ) {
-        	$destPath = substr( $destPath, 1 );
-        }
+		$destPath = "".$destination;
+		if ($destPath[0] == '/' ) {
+			$destPath = substr( $destPath, 1 );
+		}
         
-        $headers["x-emc-path"] = $destPath;
+		$headers["x-emc-path"] = $destPath;
 
-        if ($force) {
-        	$headers["x-emc-force"] = "true";
-        }
+		if ($force) {
+			$headers["x-emc-force"] = "true";
+		}
 		
 		// Sign request
 		$this->signRequest( $req, "POST", $resource, $headers, null );
@@ -1256,14 +1257,14 @@ class EsuRestApi implements EsuApi {
 		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
-    }
+	}
 	
-    /**
-     * Gets information about the web service.  Currently, this only includes
-     * the version of Atmos.
-     * @return ServiceInformation the service information object.
-     */
-    public function getServiceInformation() {
+	/**
+	 * Gets information about the web service.  Currently, this only includes
+	 * the version of Atmos.
+	 * @return ServiceInformation the service information object.
+	 */
+	public function getServiceInformation() {
 		// Create request
 		$resource = $this->context . "/service";
 		$req = $this->buildRequest( $resource, null );
@@ -1286,9 +1287,9 @@ class EsuRestApi implements EsuApi {
 		}
 
 		return $this->parseServiceInformation( $response->getBody() );
-    }
+	}
     
-    public function getObjectInfo( $id ) {
+	public function getObjectInfo( $id ) {
    		$resource = $this->getResourcePath( $this->context, $id );
 		$req = $this->buildRequest( $resource, "info" );
 		$headers = array();
@@ -1320,8 +1321,7 @@ class EsuRestApi implements EsuApi {
 	/////////////////////
 	// Private Methods //
 	/////////////////////
-	
-	
+
 	/**
 	 * Creates an HTTP Request
 	 * @param string $resource the resource to access, e.g. /rest/namespace/file.txt
@@ -1335,14 +1335,13 @@ class EsuRestApi implements EsuApi {
 		
 		// URLEncode the resource
 		$newurl = "";
-		$parts = explode( "/", substr( $resource, 1 ) );
+		$parts = explode( '/', substr( $resource, 1 ) );
 		for( $i=0; $i<count($parts); $i++ ) {
 			$newurl .= '/' . rawurlencode($parts[$i]);
 		}
 		
 		$url->setPath( $newurl );
-		
-		
+
 		if( $query ) {
 			$url->setQuery( $query );
 		}
@@ -1351,11 +1350,11 @@ class EsuRestApi implements EsuApi {
 		if( $this->timeout ) {
 			$args["timeout"] = $this->timeout;			
 		}
-		$req = &new HTTP_Request2( $url, $args );
+		$req = new HTTP_Request2( $url, null, $args );
 		if( $this->followRedirects ) {
 			$req->setConfig('follow_redirects', true);
 		}
-		
+
 		// Some systems fail to verify the SSL certificate of
 		// accesspoint.atmosonline.com (e.g. Ubuntu Linux).  Disable certificate
 		// verification
@@ -1367,9 +1366,7 @@ class EsuRestApi implements EsuApi {
 	        $req->setHeader( 'user-agent', $this->userAgent );
 		}
 		if ( $this->monitor ) {
-			require_once 'HTTP/Request2/Observer/Log.php';
-			$observer = new HTTP_Request2_Observer_Log();
-			$req->attach($observer);
+			$req->attach($this->monitor);
 		}
 		return $req;
 	}
@@ -1492,7 +1489,7 @@ class EsuRestApi implements EsuApi {
 	
 	private function normalizeSpace( $s ) {
 		$len = strlen( $s );
-		while( 1 ) {
+		while( true ) {
 			$s = str_replace( "  ", " ", $s );
 			if( strlen( $s ) == $len ) {
 				return $s;
@@ -1563,7 +1560,6 @@ class EsuRestApi implements EsuApi {
 
 	}
 	
-	
 	/**
 	 * Processes metadata and creates header entries
 	 */
@@ -1619,18 +1615,12 @@ class EsuRestApi implements EsuApi {
 			return;
 		}
 
-		$attrs = split( ", ", $header );
+		$attrs = explode( ', ', $header );
 		foreach( $attrs as $attr ) {
-			$nvpair = split( "=", $attr, 2 );
-			$name = $nvpair[0];
+			$nvpair = explode( '=', $attr, 2 );
+			$name = ltrim( $nvpair[0], " " );
 			$value = $nvpair[1];
-			
-			if( strpos( $name, " " ) === 0 ) {
-				$name = substr( $name, 1 );
-			}
-			
 			$m = new Metadata( $name, $value, $listable );
-			$this->trace( "Meta: " . $m );
 			$meta->addMetadata( $m );
 		}
 	}
@@ -1643,23 +1633,18 @@ class EsuRestApi implements EsuApi {
 	 */
 	private function readAcl( &$acl, $header, $type ) {
 		$this->trace( "readAcl: " . $header );
-		$grants = split( ",", $header );
+		$grants = explode( ',', $header );
 		foreach( $grants as $grant ) {
-			$nvpair = split( "=", $grant, 2 );
-			$grantee = $nvpair[0];
+			$nvpair = explode( '=', $grant, 2 );
+			$grantee = ltrim( $nvpair[0], " " );
 			$permission = $nvpair[1];
-			
-			if( strpos( $grantee, " " ) === 0 ) {
-				$grantee = substr( $grantee, 1 );
-			}
-			
-			// Currently, the server returns "FULL" instead of "FULL_CONTROL".
-			// For consistency, change this to value use in the request
+
+			// Older versions of Atmos may return "FULL" instead of "FULL_CONTROL".
+			// For consistency, change this to value used in the request
 			if( $permission == "FULL" ) {
 				$permission = Permission::FULL_CONTROL;
 			}
-			
-			
+
 			$this->trace( "grant: " . $grantee . "->" . $permission . " (" . $type . ")" );
 			
 			$ge = new Grantee( $grantee, $type );
@@ -1670,7 +1655,7 @@ class EsuRestApi implements EsuApi {
 		
 	}
 	
-    /**
+	/**
 	 * Processes metadata tags and creates header entry
 	 */
 	private function processTags( $tags, &$headers ) {
@@ -1828,22 +1813,19 @@ class EsuRestApi implements EsuApi {
 			return;
 		}
 		
-		$attrs = split( ",", $header );
+		$attrs = explode( ',', $header );
 		foreach( $attrs as $attr ) {
-			if( strpos( $attr, " " ) === 0 ) {
-				$attr = substr( $attr, 1 );
-			}
-			
+			$attr = ltrim( $attr, " " );
 			$tags->addTag( new MetadataTag( $attr, $listable ) );
 			$this->trace( "Created tag: >" . $attr . "<" );
 		}
 	}
 	
 	/**
-     * Gets the appropriate resource path depending on identifier
-     * type.
-     */
-    private function getResourcePath( $ctx, $id ) {
+	 * Gets the appropriate resource path depending on identifier
+	 * type.
+	 */
+	private function getResourcePath( $ctx, $id ) {
 		if( is_a( $id, "ObjectId" ) ) {
 			return $ctx . "/objects/" . $id;
 		} else if( is_a( $id, "ObjectPath" ) ) {
@@ -1892,7 +1874,7 @@ class EsuRestApi implements EsuApi {
 				$info->selection = $dom->getElementsByTagName( "selection")->item(0)->nodeValue;
 				$info->retention = $this->parseRetention( $dom->getElementsByTagName( "retention")->item(0) );
 				$info->expiration = $this->parseExpiration( $dom->getElementsByTagName( "expiration")->item(0) );
-				$this->parseReplicas( $dom->getElementsByTagName( "replica"), &$info->replicas );
+				$this->parseReplicas( $dom->getElementsByTagName( "replica"), $info->replicas );
 			} else {
 				throw new EsuException( "Could not parse XML" );
 			}
@@ -1908,7 +1890,6 @@ class EsuRestApi implements EsuApi {
 	 */
 	private function parseRetention( $node ) {
 		$retention = new ObjectRetention();
-		
 		$retention->enabled = $node->getElementsByTagName( "enabled" )->item(0)->nodeValue == "true";
 		if( $retention->enabled ) {
 			$dateStr = $node->getElementsByTagName( "endAt" )->item(0)->nodeValue;

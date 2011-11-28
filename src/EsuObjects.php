@@ -1,6 +1,6 @@
 <?php
-// Copyright © 2008, EMC Corporation.
-// Redistribution and use in source and binary forms, with or without modification, 
+// Copyright Â© 2008 - 2011 EMC Corporation.
+// Redistribution and use in source and binary forms, with or without modification,
 // are permitted provided that the following conditions are met:
 //
 //     + Redistributions of source code must retain the above copyright notice, 
@@ -52,7 +52,7 @@ class ObjectId extends Identifier {
 	/**
 	 * Regular expression used to validate identifiers.
 	 */
-	private static $ID_FORMAT = "^[0-9a-f]{44}$";
+	private static $ID_FORMAT = "/^[0-9a-f]{44}$/";
 	
 	/**
 	 * Stores the string representation of the identifier
@@ -71,7 +71,7 @@ class ObjectId extends Identifier {
 		}
 		
 		// Validate that the ID is correct
-		if( ereg( ObjectId::$ID_FORMAT, $id ) === false ) {
+		if( ! preg_match( ObjectId::$ID_FORMAT, $id ) ) {
 			throw new EsuException( "ObjectId: " . $id . " is not in the correct format" );
 		}
 		
@@ -97,9 +97,7 @@ class ObjectPath extends Identifier {
 	/**
 	 * Regular expression used to validate identifiers.
 	 */
-	private static $PATH_FORMAT = "^(/[a-zA-Z0-9 _\\.\\+\\-]+)+";
-	private static $DIR_TEST = '/$';
-	
+	private static $DIR_TEST = '/\/$/';
 	/**
 	 * Stores the string representation of the identifier
 	 * @var string
@@ -116,13 +114,6 @@ class ObjectPath extends Identifier {
 			throw new EsuException( "Path must be a string" );
 		}
 		
-		// Validate that the ID is correct
-		if ($path !== "/") {
-			if( ereg( ObjectPath::$PATH_FORMAT, $path ) === false ) {
-			throw new EsuException( "ObjectPath: " . $path . " is not in the correct format" );
-			}
-		}
-		
 		$this->path = $path;
 	}
 	
@@ -136,7 +127,7 @@ class ObjectPath extends Identifier {
 	}
 	
 	public function isDirectory() {
-		return !ereg( ObjectPath::$DIR_TEST, $this->path ) === false;
+		return (bool) preg_match( ObjectPath::$DIR_TEST, $this->path );
 	}
 }
 
@@ -576,13 +567,18 @@ class MetadataTags {
 	 * Gets a metadata tag by name or index.
 	 */
 	public function getTag( $index_or_name ) {
-		if( is_string( $index_or_name ) ) {
-			// Search by name
-			return $this->byname[$index_or_name];
+		if( is_numeric( $index_or_name ) ) {
+			// Search by index
+			if ( isset( $this->byindex[$index_or_name] ) )
+				return $this->byindex[$index_or_name];
 		} else {
-			return $this->byindex[$index_or_name];
+			// Search by name
+			if ( isset( $this->byname[$index_or_name] ) )
+				return $this->byname[$index_or_name];
 		}
-	}	
+	return null;
+	}
+
 }
 
 /**
@@ -653,7 +649,6 @@ class DirectoryEntry {
 
 /**
  * Used to return all of an object's metadata at once
- * @author jason
  */
 class ObjectMetadata {
 	private $metadata;
@@ -741,15 +736,16 @@ class ServiceInformation {
 
 class Checksum {
 	private $digest;
-	private $expected_value;
-	private $offset;
 	private $algorithm;
+	private $offset;
+	private $expected_value;
 	
 	public function __construct( $algorithm ) {
 		// For now, we only support SHA0
 		$this->digest = new SHA0();
 		$this->algorithm = "SHA0";
 		$this->offset = "0";
+		$this->expected_value = null;
 	}
 	
 	public function getAlgorithmName() {
@@ -785,13 +781,11 @@ class Checksum {
 	
 	
 	/**
-	 * Returns the checksum in a value suitable for inclusion in the 
-	 * x-emc-wschecksum method.
+	 * Returns the checksum in a format suitable for inclusion in the
+	 * x-emc-wschecksum header.
 	 */
 	public function __toString() {
 		$out = $this->algorithm."/".$this->offset."/".$this->getHashValue();
-		//print "" . gettype($out) . ": " + $out;
-		
 		return $out;
 	}
 	
