@@ -1,5 +1,5 @@
 <?php
-// Copyright © 2008 - 2011 EMC Corporation.
+// Copyright © 2008 - 2012 EMC Corporation.
 // Redistribution and use in source and binary forms, with or without modification,
 // are permitted provided that the following conditions are met:
 //
