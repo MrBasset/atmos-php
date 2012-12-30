@@ -29,6 +29,7 @@ require_once 'EsuObjects.php';
 require_once 'PEAR.php';
 require_once 'Net/URL2.php';
 require_once 'HTTP/Request2.php';
+require_once 'AccessTokens.php';
 
 /**
  * Implements the REST version of the ESU API.  This class uses the HTTP_Request
@@ -48,8 +49,10 @@ class EsuRestApi implements EsuApi {
 	private $userAgent = null;
 	private $context = '/rest';
 	private $proto;
+	private $utf8 = True;
 	private static $ID_EXTRACTOR = '/\/[0-9a-zA-Z]+\/objects\/([0-9a-f]{44})/';
-
+	private static $ACCESS_TOKEN_EXTRACTOR = '/\/[0-9a-zA-Z]+\/accesstokens\/(.*)/';
+	
 	/**
 	 * Creates a new EsuRestApi object.
 	 * @param string $host the hostname or IP address of the ESU server
@@ -111,6 +114,11 @@ class EsuRestApi implements EsuApi {
 		if ( isset( $headers['x-emc-meta'] ) ) {
 		  $this->trace( 'meta ' . $headers['x-emc-meta'] );
 		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
 		// Add acl
 		if( $acl != null ) {
 			$this->processAcl( $acl, $headers );
@@ -156,6 +164,33 @@ class EsuRestApi implements EsuApi {
 	
 	/**
 	 * Creates a new object in the cloud.
+	 * @param Keypool $kp the keypool identifier for the object to create.
+	 * @param Acl $acl Access control list for the new object. Optional, default
+	 * is NULL.
+	 * @param MetadataList $metadata Metadata list for the new object.  Optional,
+	 * default is NULL.
+	 * @param string $data The initial contents of the object.  May be appended
+	 * to later. Optional, default is NULL (no content).
+	 * @param string $mimeType the MIME type of the content.  Optional,
+	 * may be null.  If $data is non-null and $mimeType is null, the MIME
+	 * type will default to application/octet-stream.
+	 * @param Checksum $checksum if not null, use the Checksum object to compute
+	 * the checksum for the create object request.  If appending
+	 * to the object with subsequent requests, use the same
+	 * checksum object for each request.
+	 * @return ObjectId The ObjectId of the newly created object
+	 * @throws EsuException if the request fails.
+	 */
+	public function createObjectInKeypool( $kp, $acl = null, $metadata = null,
+		$data = null, $mimeType = null, $checksum = null ) {
+		
+		return $this->createObjectOnPath($kp, $acl, $metadata, $data, $mimeType, 
+				$checksum);
+	}
+	
+	
+	/**
+	 * Creates a new object in the cloud.
 	 * @param ObjectPath $path the path to the file to create.
 	 * @param Acl $acl Access control list for the new object. Optional, default
 	 * is NULL.
@@ -193,6 +228,14 @@ class EsuRestApi implements EsuApi {
 		if ( isset( $headers['x-emc-meta'] ) ) {
 		  $this->trace( 'meta ' . $headers['x-emc-meta'] );
 		}
+		if(is_a( $path, 'Keypool' )) {
+			$headers['x-emc-pool'] = $path->getPool();
+		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
 		// Add acl
 		if( $acl != null ) {
 			$this->processAcl( $acl, $headers );
@@ -279,6 +322,10 @@ class EsuRestApi implements EsuApi {
 		if (! empty($token)) {
 			$headers['x-emc-token'] = $token;
 		}
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'GET', $resource, $headers, null );
@@ -343,6 +390,15 @@ class EsuRestApi implements EsuApi {
 		if( $metadata != null ) {
 			$this->processMetadata( $metadata, $headers );
 		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
+		
 		// Check extent / data requirements
 		if( $data == null && $extent != null ) {
 			throw new EsuException( 'Cannot specify an extent without data' );
@@ -401,6 +457,10 @@ class EsuRestApi implements EsuApi {
 		$headers = array();
 		$headers['x-emc-uid'] = $this->uid;
 		$headers['Date'] = gmdate( 'r' );
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'DELETE', $resource, $headers, null );
@@ -442,7 +502,13 @@ class EsuRestApi implements EsuApi {
 		if ($destPath[0] == '/' ) {
 			$destPath = substr( $destPath, 1 );
 		}
-		$headers['x-emc-path'] = $destPath;
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+			$headers['x-emc-path'] = $this->urlencode($destPath);
+		} else {
+			$headers['x-emc-path'] = $destPath;
+		}
 		if ($force) {
 			$headers['x-emc-force'] = 'true';
 		}
@@ -538,7 +604,7 @@ class EsuRestApi implements EsuApi {
 	/**
 	 * Returns all of an object's metadata and its ACL in
 	 * one call.
-	 * @param $id the object's identifier.
+	 * @param $id Identifier the object's identifier.
 	 * @return ObjectMetadata the object's metadata
 	 */
 	public function getAllMetadata( $id ) {
@@ -548,6 +614,14 @@ class EsuRestApi implements EsuApi {
 		$headers = array();
 		$headers['x-emc-uid'] = $this->uid;
 		$headers['Date'] = gmdate( 'r' );
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'HEAD', $resource, $headers, null );
@@ -561,11 +635,14 @@ class EsuRestApi implements EsuApi {
 		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
+		
+		$response_utf8 = 'true' == $response->getHeader( 'x-emc-utf8' );
+		
 		// Parse return headers.  Regular metadata is in x-emc-meta and
 		// listable metadata is in x-emc-listable-meta
 		$meta = new MetadataList();
-		$this->readMetadata( $meta, $response->getHeader( 'x-emc-meta' ), false );
-		$this->readMetadata( $meta, $response->getHeader( 'x-emc-listable-meta' ), true );
+		$this->readMetadata( $meta, $response->getHeader( 'x-emc-meta' ), false, $response_utf8 );
+		$this->readMetadata( $meta, $response->getHeader( 'x-emc-listable-meta' ), true, $response_utf8 );
 		$value = $response->getHeader( 'content-type' );
 		if (! empty($value))
 			{ $m = new Metadata( 'contenttype', $value, false );  $meta->addMetadata( $m ); }
@@ -599,6 +676,14 @@ class EsuRestApi implements EsuApi {
 		if( $tags != null ) {
 			$this->processTags( $tags, $headers );
 		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'GET', $resource, $headers, null );
@@ -612,10 +697,13 @@ class EsuRestApi implements EsuApi {
 		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
+		
+		$response_utf8 = 'true' == $response->getHeader( 'x-emc-utf8' );
+		
 		// Parse return headers
 		$meta = new MetadataList();
-		$this->readMetadata( $meta, $response->getHeader( 'x-emc-meta' ), false );
-		$this->readMetadata( $meta, $response->getHeader( 'x-emc-listable-meta' ), true );
+		$this->readMetadata( $meta, $response->getHeader( 'x-emc-meta' ), false, $response_utf8 );
+		$this->readMetadata( $meta, $response->getHeader( 'x-emc-listable-meta' ), true, $response_utf8 );
 		return $meta;
 	} // EsuRestApi::getSystemMetadata()
 
@@ -639,6 +727,14 @@ class EsuRestApi implements EsuApi {
 			$this->processTags( $tags, $headers );
 		}
 		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
+		
 		// Sign and send the request
 		$this->signRequest( $req, 'GET', $resource, $headers, null );
 		try {
@@ -651,11 +747,13 @@ class EsuRestApi implements EsuApi {
 		if( $response->getStatus() > 299 ) {
 			$this->handleError( $response );
 		}
+		$response_utf8 = 'true' == $response->getHeader( 'x-emc-utf8' );
+		
 		// Parse return headers.  Regular metadata is in x-emc-meta and
 		// listable metadata is in x-emc-listable-meta
 		$meta = new MetadataList();
-		$this->readMetadata( $meta, $response->getHeader( 'x-emc-meta' ), false );
-		$this->readMetadata( $meta, $response->getHeader( 'x-emc-listable-meta' ), true );
+		$this->readMetadata( $meta, $response->getHeader( 'x-emc-meta' ), false, $response_utf8 );
+		$this->readMetadata( $meta, $response->getHeader( 'x-emc-listable-meta' ), true, $response_utf8 );
 		return $meta;
 	} // EsuRestApi::getUserMetadata()
 	
@@ -677,6 +775,14 @@ class EsuRestApi implements EsuApi {
 			$this->processMetadata( $metadata, $headers );
 		}
 		$headers['Date'] = gmdate( 'r' );
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'POST', $resource, $headers, null );
@@ -711,6 +817,14 @@ class EsuRestApi implements EsuApi {
 		} else {
 			throw new EsuException( 'MetadataTags cannot be null.' );
 		}
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'DELETE', $resource, $headers, null );
@@ -738,7 +852,15 @@ class EsuRestApi implements EsuApi {
 		$headers = array();
 		$headers['x-emc-uid'] = $this->uid;
 		$headers['Date'] = gmdate( 'r' );
-
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
 		// Sign and send the request
 		$this->signRequest( $req, 'GET', $resource, $headers, null );
 		try {
@@ -902,6 +1024,10 @@ class EsuRestApi implements EsuApi {
 		if( $queryTag != null ) {
 			$headers['x-emc-tags'] = $queryTag;
 		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'GET', $resource, $headers, null );
@@ -974,6 +1100,10 @@ class EsuRestApi implements EsuApi {
 		$headers['x-emc-uid'] = $this->uid;
 		$headers['Date'] = gmdate( 'r' );
 		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
+		
 		// Sign and send the request
 		$this->signRequest( $req, 'GET', $resource, $headers, null );
 		try {
@@ -1033,9 +1163,14 @@ class EsuRestApi implements EsuApi {
 	 * entire object/file is read.
 	 * @param Identifier $id the object to generate the URL for
 	 * @param int $expiration the expiration date of the URL (in unix time)
+	 * @param string $disposition the value of the Content-Disposition header
+	 * on the response, e.g. 'attachment; filename="foo.txt"'.  This is used
+	 * to force browsers alter their behavior (download vs. display inline) and
+	 * to override the filename for objects.  See RFCs 2183, 6266.  Support
+	 * varies by browser.  Only supported on Atmos 2.1.0+.
 	 * @return string a URL that can be used to share the object's content
 	 */
-	public function getShareableUrl( $id, $expiration ) {
+	public function getShareableUrl( $id, $expiration, $disposition=null ) {
 		// Compute the response
    		$resource = $this->getResourcePath( $this->context, $id );
        	$uidEnc = urlencode( $this->uid );
@@ -1043,8 +1178,14 @@ class EsuRestApi implements EsuApi {
        	$sb .= strtolower( $resource ) . "\n";
         $sb .= $this->uid . "\n";
        	$sb .= $expiration;
+       	if($disposition != null) {
+       		$sb .= "\n" . $disposition;
+       	}
         $signature = $this->sign( $sb );
        	$resource .= '?uid=' . $uidEnc . '&expires=' . $expiration . '&signature=' . urlencode( $signature );
+       	if($disposition != null) {
+       		$resource .= '&disposition=' . $this->urlencode($disposition);
+       	}
         $url = $this->proto . '://' . $this->host . ':' . $this->port . $resource;
 
 		// Return the response
@@ -1053,7 +1194,7 @@ class EsuRestApi implements EsuApi {
 
 	/**
 	 * Lists the versions of an object.
-	 * @param Identifier $id the object whose versions to list.
+	 * @param ObjectId $id the object whose versions to list.
 	 * @return array The list of versions of the object.  If the object does
 	 * not have any versions, the array will be empty.
 	 */
@@ -1147,10 +1288,37 @@ class EsuRestApi implements EsuApi {
 			$this->handleError( $response );
 		}		
 	} // EsuRestApi::restoreVersion()
+	
+	/**
+	 * Deletes an object version.
+	 * @param ObjectId $vid the version ID to delete.
+	 * @throws EsuException if the request fails.
+	 */
+	public function deleteVersion($vid) {
+		// Build the request
+		$resource = $this->getResourcePath( $this->context, $vid );
+		$req = $this->buildRequest( $resource, 'versions' );
+		$headers = array();
+		$headers['x-emc-uid'] = $this->uid;
+		$headers['Date'] = gmdate( 'r' );
+		
+		// Sign and send the request
+		$this->signRequest( $req, 'DELETE', $resource, $headers, null );
+		try {
+			$response = @$req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( 'Sending request failed: ' . $e->__toString() );
+		}
+		
+		// Return the response
+		if( $response->getStatus() > 299 ) {
+			$this->handleError( $response );
+		}
+	} // EsuRestApi::deleteVersion()
 
 	/**
 	 * Returns policy information about an existing object.
-	 * @param $id the object's identifier.
+	 * @param $id Identifier the object's identifier.
 	 * @return ObjectInfo the object's policy information.
 	 */
 	public function getObjectInformation( $id ) {
@@ -1160,6 +1328,10 @@ class EsuRestApi implements EsuApi {
 		$headers = array();
 		$headers['x-emc-uid'] = $this->uid;
 		$headers['Date'] = gmdate( 'r' );
+		
+		if(is_a( $id, 'Keypool' )) {
+			$headers['x-emc-pool'] = $id->getPool();
+		}
 
 		// Sign and send the request
 		$this->signRequest( $req, 'GET', $resource, $headers, null );
@@ -1205,6 +1377,212 @@ class EsuRestApi implements EsuApi {
 		}
 		return $this->parseServiceInformation( $response->getBody() );
 	} // EsuRestApi::getServiceInformation()
+	
+	/**
+	 * Creates a new anonymous access token.
+	 * @param Policy $policy The policy to apply to the access token.
+	 * @param Identifier $id optional identifier to associate with the access
+	 * token.  For download tokens, this can be either an ObjectPath or 
+	 * ObjectId.  For upload tokens, this can be an ObjectPath.
+	 * @param MetadataList $metadata for upload tokens, metadata to associate
+	 * with the newly created object.
+	 * @param Acl $acl For upload tokens, an ACL to associate with the newly
+	 * @return string the new access token ID.
+	 */
+	public function createAccessToken($policy = NULL, $id = NULL, 
+			$metadata = NULL, $acl = NULL) {
+		// Build the request
+		$resource = $this->context . '/accesstokens';
+		$req = $this->buildRequest( $resource, null );
+		$response = null;
+		$headers = array();
+		$mimeType = 'text/xml';
+		$headers['Content-Type'] = $mimeType;
+		$headers['x-emc-uid'] = $this->uid;
+		// Process metadata
+		if( $metadata != null ) {
+			$this->processMetadata( $metadata, $headers );
+		}
+		if ( isset( $headers['x-emc-meta'] ) ) {
+			$this->trace( 'meta ' . $headers['x-emc-meta'] );
+		}
+		
+		if($this->utf8) {
+			$headers['x-emc-utf8'] = 'true';
+		}
+		
+		// Add acl
+		if( $acl != null ) {
+			$this->processAcl( $acl, $headers );
+		}
+		// Process data
+		if( $policy != null ) {
+			$req->setBody( $policy->toXml() );
+		} else {
+			$req->setBody( '' );
+		}
+		// Add date
+		$headers['Date'] = gmdate( 'r' );
+		
+		// Check if $id is set
+		if($id != null) {
+			if( is_a( $id, 'ObjectId' ) ) {
+				$headers['x-emc-objectid'] = $id->__toString();
+			} elseif( is_a( $id, 'ObjectPath' ) ) {
+				if($this->utf8) {
+					$headers['x-emc-path'] = $this->urlencode($id->__toString());
+				} else {
+					$headers['x-emc-path'] = $id->__toString();
+				}
+			} else {
+				throw new EsuException("Invalid ID for access token: $id");
+			}
+		}
+		
+		// Sign and send the request
+		$this->signRequest( $req, 'POST', $resource, $headers );
+		try {
+			$response = @$req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( 'Sending request failed: ' . $e->__toString() );
+		}
+		
+		// Return the response
+		if( $response->getStatus() > 299 ) {
+			$this->handleError( $response );
+		}
+		// The new object ID is returned in the location response header
+		$location = $response->getHeader( 'location' );
+		$pos = array();
+		// Parse the value out of the URL
+		preg_match( EsuRestApi::$ACCESS_TOKEN_EXTRACTOR, $location, $pos );
+		$this->trace( 'Location: ' . $location );
+		$this->trace( 'regex: ' . EsuRestApi::$ACCESS_TOKEN_EXTRACTOR );
+		$this->trace( 'pos 1 ' . $pos[1] );
+		return $pos[1];		
+	} // EsuRestApi::createAccessToken()
+	
+	/**
+	 * Deletes an anonymous access token.
+	 * @param string $tokenId
+	 */
+	public function deleteAccessToken($tokenId) {
+		// Build the request
+		$resource = $this->context . '/accesstokens/' . $tokenId;
+		$req = $this->buildRequestNoEscape( $resource, null );
+		$headers = array();
+		$headers['x-emc-uid'] = $this->uid;
+		$headers['Date'] = gmdate( 'r' );
+		
+		// Sign and send the request
+		$this->signRequest( $req, 'DELETE', $resource, $headers, null );
+		try {
+			$response = @$req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( 'Sending request failed: ' . $e->__toString() );
+		}
+		
+		// Return the response
+		if( $response->getStatus() > 299 ) {
+			$this->handleError( $response );
+		}
+	} // EsuRestApi::deleteAccessToken()
+	
+	/**
+	 * Gets information about an anonymous access token.
+	 * @param string $tokenId
+	 * @return AccessToken the access token info object.
+	 */
+	public function getAccessTokenInfo($tokenId) {
+		// Build the request
+		$resource = $this->context . "/accesstokens/" . $tokenId;
+		$req = $this->buildRequestNoEscape( $resource, 'info' );
+		$headers = array();
+		$headers['x-emc-uid'] = $this->uid;
+		$headers['Date'] = gmdate( 'r' );
+		
+		// Sign and send the request
+		$this->signRequest( $req, 'GET', $resource, $headers, null );
+		try {
+			$response = @$req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( 'Sending request failed: ' . $e->__toString() );
+		}
+		
+		// Return the response
+		if( $response->getStatus() > 299 ) {
+			$this->handleError( $response );
+		}
+		
+		// Parse the returned objects.  They are passed in the response
+		// body in an XML format.
+		return AccessToken::fromXml($response->getBody());
+	} // EsuRestApi::getAccessTokenInfo()
+	
+	/**
+	 * Lists access tokens for the current subtenant.  After calling this 
+	 * function, check the paginationToken field on the result.  If it's not 
+	 * NULL, there are more results to fetch.
+	 * @param string $paginationToken the pagination token.  Set to null for
+	 * the first page.
+	 * @param number $limit the number of objects to return per page.
+	 * @return ListAccessTokensResult the list of access tokens.
+	 */
+	public function listAccessTokens($paginationToken=NULL, $limit=0) {
+		// Build the request
+		$resource = $this->context . "/accesstokens";
+		$req = $this->buildRequest( $resource, null );
+		$headers = array();
+		$headers['x-emc-uid'] = $this->uid;
+		$headers['Date'] = gmdate( 'r' );
+		// Limit number of results if desired
+		if (! empty($limit)) {
+			$headers['x-emc-limit'] = $limit;
+		}
+		if (! empty($token)) {
+			$headers['x-emc-token'] = $paginationToken;
+		}
+		
+		// Sign and send the request
+		$this->signRequest( $req, 'GET', $resource, $headers, null );
+		try {
+			$response = @$req->send();
+		} catch( HTTP_Request2_Exception $e ) {
+			throw new EsuException( 'Sending request failed: ' . $e->__toString() );
+		}
+		
+		// Return the response
+		if( $response->getStatus() > 299 ) {
+			$this->handleError( $response );
+		}
+		$body = $response->getBody();
+		if( $checksum ) {
+			// Update expected checksum
+			$checksum->setExpectedValue( $response->getHeader( 'x-emc-wschecksum' ) );
+			$checksum->update( $body );
+		}
+
+		$resToken = $response->getHeader( 'x-emc-token' );
+		
+		$tokenList = ListAccessTokensResult::fromXml($body);
+		$tokenList->paginationToken = $resToken;
+		
+		return $tokenList;
+		
+	} // EsuRestApi::listAccessTokens()
+	
+	/**
+	 * For a given access token, get the absolute URL to access the token.  The
+	 * current connection parameters (host, port, etc) will be used to generate
+	 * the URL.
+	 * @param string $tokenId the token to generate an absolute URL for.
+	 * @return Net_URL2 The absolute URL for the token.
+	 */
+	public function getAccessTokenUrl($tokenId) {
+		$resource = $this->context . "/accesstokens/" . $tokenId;
+		$req = $this->buildRequestNoEscape( $resource, null );
+		return $req->getUrl();
+	}
 
 	/**
 	 * Returns the Atmos protocol information
@@ -1275,34 +1653,48 @@ class EsuRestApi implements EsuApi {
 	public function setUserAgent( $userAgent ) {
 		$this->userAgent = $userAgent;
 	} // EsuRestApi::setUserAgent()
+	
+	
+	/**
+	 * Enables and disables UTF-8 mode.  When true, this causes certain HTTP
+	 * headers like those containing metadata to be URL encoded so they can 
+	 * contain any UTF-8 characters.  By default, this is on.  It is supported
+	 * in Atmos 1.4.2 and 2.0.1+.  It is highly recommended for most situations,
+	 * especially when renaming objects and creating access tokens for namespace
+	 * paths since those filenames are encoded and sent as HTTP headers.  It
+	 * will also allow a wider range of characters in metadata (most notably,
+	 * the comma).  The only reason you'd want to turn this off is that there
+	 * is an 8kB limit to HTTP headers returned by the server.  If your objects
+	 * contain lots of metadata (>2kB), and you know that metadata is us-ascii, 
+	 * you can turn this off.
+	 * @param boolean $mode
+	 * @since 2.1.0
+	 */
+	public function setUtf8Mode( $mode ) {
+		$this->utf8 = $mode;
+	} // EsuRestApi::setUtf8Mode
 
-    
 	
 	/////////////////////
 	// Private Methods //
 	/////////////////////
-
+	
 	/**
-	 * Creates an HTTP Request
-	 * @param string $resource the resource to access, e.g. /rest/namespace/file.txt
-	 * @param string $query query parameters, may be null, e.g. "versions"
+	 * Creates a new HTTP request without URL-encoding the resource.  Use this
+	 * if the URL is already encoded properly (e.g. for accesstokens)
+	 * @param string $resource the URL path for the resource
+	 * @param string $query the query string for the URL
+	 * @return HTTP_Request2
 	 */
-	private function buildRequest( $resource, $query ) {
+	private function buildRequestNoEscape( $resource, $query ) {
 		// Build the request
 		$url = new Net_URL2( null );
 		$url->setScheme( $this->proto );
 		$url->setHost( $this->host );
 		$url->setPort( $this->port );
 		
-		// URLEncode the resource
-		$newurl = '';
-		$parts = explode( '/', substr( $resource, 1 ) );
-		for( $i=0; $i<count($parts); $i++ ) {
-			$newurl .= '/' . rawurlencode($parts[$i]);
-		}
-
 		// Create the URL
-		$url->setPath( $newurl );
+		$url->setPath( $resource );
 		if( $query ) {
 			$url->setQuery( $query );
 		}
@@ -1332,6 +1724,23 @@ class EsuRestApi implements EsuApi {
 			'ssl_verify_host'       => FALSE
 		));
 		return $req;
+	} // EsuRestApi::buildRequest()
+
+	/**
+	 * Creates an HTTP Request
+	 * @param string $resource the resource to access, e.g. /rest/namespace/file.txt
+	 * @param string $query query parameters, may be null, e.g. "versions"
+	 */
+	private function buildRequest( $resource, $query ) {
+		// URLEncode the resource
+		$newurl = '';
+		$parts = explode( '/', substr( $resource, 1 ) );
+		for( $i=0; $i<count($parts); $i++ ) {
+			$newurl .= '/' . rawurlencode($parts[$i]);
+		}
+		
+		return $this->buildRequestNoEscape($newurl, $query);
+
 	} // EsuRestApi::buildRequest()
 
 	/**
@@ -1555,12 +1964,18 @@ class EsuRestApi implements EsuApi {
 
 	/**
 	 * Formats a tag value for passing in the header.
+	 * @param Metadata $meta
 	 */
 	private function formatTag( $meta ) {
-		// strip commas and newlines for now.
-		$fixed = str_replace( ',', '', $meta->getValue() );
-		$fixed = str_replace( "\n", '', $fixed );
-		return $meta->getName() . '=' . $fixed;
+		if($this->utf8) {
+			return $this->urlencode($meta->getName()) . '=' .
+				$this->urlencode($meta->getValue());
+		} else {
+			// strip commas and newlines for now.
+			$fixed = str_replace( ',', '', $meta->getValue() );
+			$fixed = str_replace( "\n", '', $fixed );
+			return $meta->getName() . '=' . $fixed;
+		}
 	} // EsuRestApi::formatTag()
 
 	/**
@@ -1571,7 +1986,7 @@ class EsuRestApi implements EsuApi {
 	 * @param boolean $listable whether to mark the Metadata objects as
 	 * listable or not
 	 */
-	private function readMetadata( &$meta, $header, $listable ) {
+	private function readMetadata( &$meta, $header, $listable, $utf8 ) {
 		if( $header == null ) {
 			return;
 		}
@@ -1581,7 +1996,12 @@ class EsuRestApi implements EsuApi {
 			$nvpair = explode( '=', $attr, 2 );
 			$name = ltrim( $nvpair[0], ' ' );
 			$value = $nvpair[1];
+			if($utf8) {
+				$name = urldecode($name);
+				$value = urldecode($value);
+			}
 			$m = new Metadata( $name, $value, $listable );
+			
 			$meta->addMetadata( $m );
 		}
 	} // EsuRestApi::readMetadata()
@@ -1628,7 +2048,11 @@ class EsuRestApi implements EsuApi {
 			if( strlen( $taglist ) > 0 ) {
 				$taglist .= ',';
 			}
-			$taglist .= $tag->getName();
+			if($this->utf8) {
+				$taglist .= $this->urlencode($tag->getName());
+			} else {
+				$taglist .= $tag->getName();
+			}
 		}
 
 		if( strlen( $taglist ) > 0 ) {
@@ -1803,6 +2227,8 @@ class EsuRestApi implements EsuApi {
 			if ($path === '/')  { $path = '//'; }  // its the root directory
 			$str = $ctx . '/namespace' . $path;
 			return $str;
+		} elseif( is_a( $id, 'Keypool' ) ) {
+			return $ctx . '/namespace/' . $id;
 		} else {
 			throw new EsuException( 'invalid object identifier' );
 		}
@@ -1914,6 +2340,20 @@ class EsuRestApi implements EsuApi {
 		$replica->current = $replicaElement->getElementsByTagName( 'current' )->item(0)->nodeValue == 'true';
 		return $replica;
 	} // EsuRestApi::parseReplica()
+	
+	/**
+	 * URL encoder that uses %20 instead of '+'.
+	 * @param string $value the raw value
+	 * @return string The encoded value
+	 */
+	private function urlencode($value) {
+		$value = urlencode($value);
+		
+		// We don't like the old-school "+"
+		$value = str_replace('+', '%20', $value);
+		
+		return $value;
+	}
 
 } // class EsuRestApi
 

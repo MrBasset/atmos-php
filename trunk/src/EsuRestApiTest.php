@@ -42,16 +42,18 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	 * UID to run tests with.  Change this value to your UID.
 	 */
 	private $uid = '<your uid>';
+	
 	/**
 	 * Shared secret for UID.  Change this value to your UID's shared secret
 	 */
 	private $secret = '<your key>';
+	
 	/**
 	 * Hostname or IP of ESU server.  Change this value to your server's
 	 * hostname or ip address.
 	 */
 	private $host = 'api.atmosonline.com';
-	
+		
 	/**
 	 * Port of ESU server (usually 80 or 443)
 	 */
@@ -71,21 +73,43 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	/**
 	 * API object used for test cases
 	 */
-	private $esu; 
+	private $esu;
+	
+	private $atmosMajorMinor;
 	
 	/**
 	 * Keeps track of created objects so they can be cleaned up
 	 */
 	private $cleanup = array();
 	
+	private $CHECK_STRING_1="hello world";
+	private $CHECK_STRING_1a="hello";
+	private $CHECK_STRING_1b=" world";
+	private $CHECK_STRING_1_SHA0="9fce82c34887c1953b40b3a2883e18850c4fa8a6";
+	private $CHECK_STRING_1a_SHA0="ac62a630ca850b4ea07eda664eaecf9480843152";
+	private $CHECK_STRING_1_SHA1="2aae6c35c94fcfb415dbe95f408b9ce91ee846ed";
+	private $CHECK_STRING_1a_SHA1="aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d";
+	private $CHECK_STRING_1_MD5="5eb63bbbe01eeed093cb22bb8f5acdc3";
+	private $CHECK_STRING_1a_MD5="5d41402abc4b2a76b9719d911017c592";
+	private $CHECK_STRING_1_OFFSET="/11/";
+	
+	private $TEST_KEYPOOL = "test_keypool_php";
+	
 	/**
 	 * Set up before a test is run.  Initializes the connection object.
 	 */
 	public function setUp() {
+		if(ini_get('date.timezone') == NULL) {
+			date_default_timezone_set('UTC');
+		}
+		
 		$this->esu = new EsuRestApi( $this->host, $this->port, $this->uid, 
 			$this->secret );
-		$this->esu->setDebug( $this->debug );
+		//$this->esu->setDebug( $this->debug );
 		//$this->esu->setTimeout( 180.0 );
+		
+		$serviceInfo = $this->esu->getServiceInformation();
+		$this->atmosMajorMinor = (float)$serviceInfo->getAtmosVersion();
 	}
 	
 	/**
@@ -105,6 +129,97 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	//
 	// TESTS START HERE
 	//
+	
+	private $xml_input = 
+'<?xml version="1.0" encoding="UTF-8"?>
+<policy>
+    <expiration>2012-12-01T12:00:00.000Z</expiration>
+    <max-uploads>1</max-uploads>
+    <source>
+        <allow>127.0.0.0/24</allow>
+    </source>
+    <content-length-range from="10" to="11000"/>
+    <form-field name="x-emc-redirect-url"/>
+    <form-field name="x-emc-meta" optional="true">
+        <matches>^(\w+=\w+)|((\w+=\w+),(\w+, \w+))$</matches>
+    </form-field>
+</policy>';
+	
+	private $xml_output =
+'<?xml version="1.0" encoding="UTF-8"?>
+<policy>
+  <expiration>2012-12-01T12:00:00+00:00</expiration>
+  <max-uploads>1</max-uploads>
+  <source>
+    <allow>127.0.0.0/24</allow>
+  </source>
+  <content-length-range from="10" to="11000"/>
+  <form-field name="x-emc-redirect-url"/>
+  <form-field name="x-emc-meta" optional="true">
+    <matches>^(\w+=\w+)|((\w+=\w+),(\w+, \w+))$</matches>
+  </form-field>
+</policy>
+';
+	
+	/**
+	 * Tests parsing a Policy XML document
+	 */
+	public function testParsePolicy() {
+		print( "Parsing XML: " . $this->xml_input . "\n");
+		
+		$policy = Policy::fromXml( $this->xml_input );
+		
+		PHPUnit_Framework_Assert::assertNotNull( $policy, 'null policy returned');
+		PHPUnit_Framework_Assert::assertEquals(1354363200, $policy->expiration, 'Expiration incorrect');
+		PHPUnit_Framework_Assert::assertEquals(1, $policy->maxUploads, 'Max uploads incorrect');
+		PHPUnit_Framework_Assert::assertNull($policy->maxDownloads, 'Max downloads should not be set');
+		PHPUnit_Framework_Assert::assertNotNull($policy->source, 'policy missing source');
+		PHPUnit_Framework_Assert::assertNotNull($policy->source->allow, 'source allow was not set');
+		PHPUnit_Framework_Assert::assertNull($policy->source->disallow, 'source disallow should not be set');
+		PHPUnit_Framework_Assert::assertEquals("127.0.0.0/24", $policy->source->allow[0]);
+		PHPUnit_Framework_Assert::assertEquals(10, $policy->contentLengthRange->from);
+		PHPUnit_Framework_Assert::assertEquals(11000, $policy->contentLengthRange->to);
+		PHPUnit_Framework_Assert::assertEquals(2, count($policy->formField));
+		PHPUnit_Framework_Assert::assertEquals("x-emc-redirect-url", $policy->formField[0]->name);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[0]->optional);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[0]->matches);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[0]->eq);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[0]->endsWith);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[0]->startsWith);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[0]->contains);
+		PHPUnit_Framework_Assert::assertEquals("x-emc-meta", $policy->formField[1]->name);
+		PHPUnit_Framework_Assert::assertNotNull($policy->formField[1]->optional);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[1]->eq);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[1]->endsWith);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[1]->startsWith);
+		PHPUnit_Framework_Assert::assertNull($policy->formField[1]->contains);
+		PHPUnit_Framework_Assert::assertNotNull($policy->formField[1]->matches);
+		PHPUnit_Framework_Assert::assertEquals(1, count($policy->formField[1]->matches));
+		PHPUnit_Framework_Assert::assertEquals("^(\\w+=\\w+)|((\\w+=\\w+),(\\w+, \\w+))$", $policy->formField[1]->matches[0]);
+	}
+	
+	public function testSerializePolicy() {
+		$policy = new Policy();
+		$policy->expiration = 1354363200;
+		$policy->maxUploads = 1;
+		$policy->source = new SourceType();
+		$policy->source->allow[] = "127.0.0.0/24";
+		$policy->contentLengthRange = new ContentLengthRangeType();
+		$policy->contentLengthRange->from = 10;
+		$policy->contentLengthRange->to = 11000;
+		$formField = new FormFieldType();
+		$formField->name = 'x-emc-redirect-url';
+		$policy->formField[] = $formField;
+		$formField = new FormFieldType();
+		$formField->name = 'x-emc-meta';
+		$formField->optional = True;
+		$formField->matches[] = "^(\\w+=\\w+)|((\\w+=\\w+),(\\w+, \\w+))$";
+		$policy->formField[] = $formField;
+		
+		$xml = $policy->toXml();
+		
+		PHPUnit_Framework_Assert::assertEquals($this->xml_output, $xml);
+	}
 	
 	/**
 	 * Test creating one empty object.  No metadata, no content.
@@ -408,7 +523,6 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		
 		// Version the object
 		$vid = $this->esu->versionObject( $id );
-		$this->cleanup[] = $vid;
 		PHPUnit_Framework_Assert::assertNotNull( $vid, 'null version ID returned' );
 		
 		// Fetch the version and read its data
@@ -418,6 +532,7 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		PHPUnit_Framework_Assert::assertEquals( 'bar', $meta->getMetadata( 'unlistable' )->getValue(), "value of 'unlistable' wrong" );
 		PHPUnit_Framework_Assert::assertEquals( 'bar2 bar2', $meta->getMetadata( 'unlistable2' )->getValue(), "value of 'unlistable2' wrong" );
 		
+		$this->esu->deleteVersion($vid);
 	}
 	
 	/**
@@ -440,18 +555,35 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		
 		// Version the object
 		$vid1 = $this->esu->versionObject( $id );
-		$this->cleanup[] = $vid1;
 		PHPUnit_Framework_Assert::assertNotNull( $vid1, 'null version ID returned' );
 		$vid2 = $this->esu->versionObject( $id );
-		$this->cleanup[] = $vid2;
 		PHPUnit_Framework_Assert::assertNotNull( $vid2, 'null version ID returned' );
 		
 		// List the versions and ensure their IDs are correct
 		$versions = $this->esu->listVersions( $id );
 		PHPUnit_Framework_Assert::assertEquals( 2, count( $versions ), 'Wrong number of versions returned' );
-		PHPUnit_Framework_Assert::assertTrue( array_search( $vid1, $versions ) !== false, 'version 1 not found in version list' );
-		PHPUnit_Framework_Assert::assertTrue( array_search( $vid2, $versions ) !== false, 'version 2 not found in version list' );
-		PHPUnit_Framework_Assert::assertFalse( array_search( $id, $versions ) !== false, 'base object found in version list' );
+		PHPUnit_Framework_Assert::assertTrue( $this->findVersion( $vid1, $versions ) !== false, 'version 1 not found in version list' );
+		PHPUnit_Framework_Assert::assertTrue( $this->findVersion( $vid2, $versions ) !== false, 'version 2 not found in version list' );
+		PHPUnit_Framework_Assert::assertFalse( $this->findVersion( $id, $versions ) !== false, 'base object found in version list' );
+		
+		$this->esu->deleteVersion($vid1);
+		$this->esu->deleteVersion($vid2);
+	}
+	
+	/**
+	 * Searches for a particular versionId in a list of versions.
+	 * @param ObjectId $vid
+	 * @param ObjectVersion[] $versionList
+	 * @return boolean True if the version was found.
+	 */
+	private function findVersion( $vid, $versionList ) {
+		for($i=0; $i<count($versionList); $i++) {
+			$v = $versionList[$i];
+			if($v->getId() == $vid) {
+				return True;
+			}
+		}
+		return False;
 	}
 	
 	/**
@@ -475,6 +607,7 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
         $content = $this->esu->readObject($id, null, null);
         PHPUnit_Framework_Assert::assertEquals( 'Base Version Content', $content, 'object content wrong' );
 
+        $this->esu->deleteVersion($vId);
     }
 	
 	
@@ -992,7 +1125,7 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
         $req = &new HTTP_Request2( $url );
         $response = $req->send();
 		if( $response->getStatus() > 399 ) {
-			PHPUnit_Framework_Assert::assertTrue( false, 'HTTP status ' . $req->getStatus() );
+			PHPUnit_Framework_Assert::assertTrue( false, 'HTTP status ' . $response->getStatus() );
 		}
         $content = $response->getBody();
         echo 'content: ' . $content;
@@ -1027,13 +1160,76 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		PHPUnit_Framework_Assert::assertEquals( 'bar2 bar2', $meta->getMetadata( 'unlistable2' )->getValue(), "value of 'unlistable2' wrong" );
 		PHPUnit_Framework_Assert::assertEquals( $acl, $newacl, "ACLs don't match" );
 	}
+
 	
-	public function testChecksum() {
-		$data = 'hello world';
+	public function testChecksumSHA0() {
 		$ck = new Checksum( 'SHA0' );
-		$ck->update( $data );
-		PHPUnit_Framework_Assert::assertEquals( 'SHA0/11/9fce82c34887c1953b40b3a2883e18850c4fa8a6', "$ck", "value of 'checksum' wrong" );
+		$ck->update( $this->CHECK_STRING_1 );
+		PHPUnit_Framework_Assert::assertEquals( 
+			'SHA0' . $this->CHECK_STRING_1_OFFSET . $this->CHECK_STRING_1_SHA0, 
+			"$ck", "value of 'checksum' wrong" );
+		
+		// Incremental
+		$ck = new Checksum( 'SHA0' );
+		$ck->update( $this->CHECK_STRING_1a );
+		PHPUnit_Framework_Assert::assertEquals($this->CHECK_STRING_1a_SHA0, 
+			$ck->getHashValue());
+		$ck->update( $this->CHECK_STRING_1b );
+		PHPUnit_Framework_Assert::assertEquals($this->CHECK_STRING_1_SHA0, 
+			$ck->getHashValue());
+		PHPUnit_Framework_Assert::assertEquals( 
+			'SHA0' . $this->CHECK_STRING_1_OFFSET . $this->CHECK_STRING_1_SHA0, 
+			"$ck", "value of 'checksum' wrong" );
 	}
+	
+	public function testChecksumSHA1() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$ck = new Checksum( 'SHA1' );
+		$ck->update( $this->CHECK_STRING_1 );
+		PHPUnit_Framework_Assert::assertEquals(
+		'SHA1' . $this->CHECK_STRING_1_OFFSET . $this->CHECK_STRING_1_SHA1,
+		"$ck", "value of 'checksum' wrong" );
+	
+		// Incremental
+		$ck = new Checksum( 'SHA1' );
+				$ck->update( $this->CHECK_STRING_1a );
+				PHPUnit_Framework_Assert::assertEquals($this->CHECK_STRING_1a_SHA1,
+				$ck->getHashValue());
+				$ck->update( $this->CHECK_STRING_1b );
+				PHPUnit_Framework_Assert::assertEquals($this->CHECK_STRING_1_SHA1,
+				$ck->getHashValue());
+				PHPUnit_Framework_Assert::assertEquals(
+				'SHA1' . $this->CHECK_STRING_1_OFFSET . $this->CHECK_STRING_1_SHA1,
+				"$ck", "value of 'checksum' wrong" );
+	}
+	
+	public function testChecksumMD5() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$ck = new Checksum( 'MD5' );
+		$ck->update( $this->CHECK_STRING_1 );
+		PHPUnit_Framework_Assert::assertEquals(
+		'MD5' . $this->CHECK_STRING_1_OFFSET . $this->CHECK_STRING_1_MD5,
+		"$ck", "value of 'checksum' wrong" );
+	
+		// Incremental
+		$ck = new Checksum( 'MD5' );
+		$ck->update( $this->CHECK_STRING_1a );
+		PHPUnit_Framework_Assert::assertEquals($this->CHECK_STRING_1a_MD5,
+		$ck->getHashValue());
+		$ck->update( $this->CHECK_STRING_1b );
+		PHPUnit_Framework_Assert::assertEquals($this->CHECK_STRING_1_MD5,
+		$ck->getHashValue());
+		PHPUnit_Framework_Assert::assertEquals(
+		'MD5' . $this->CHECK_STRING_1_OFFSET . $this->CHECK_STRING_1_MD5,
+		"$ck", "value of 'checksum' wrong" );
+	}
+	
 	
 	public function testCreateChecksum() {
 		$ck = new Checksum( 'SHA0' );
@@ -1041,7 +1237,29 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		$this->cleanup[] = $id;
 		PHPUnit_Framework_Assert::assertTrue( strlen(''.$ck) > 0, 'Checksum is empty' );
 	}
-
+	
+	public function testCreateChecksumSHA1() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$ck = new Checksum( 'SHA1' );
+		$id = $this->esu->createObject( null, null, 'hello', 'text/plain', $ck );
+		$this->cleanup[] = $id;
+		PHPUnit_Framework_Assert::assertTrue( strlen(''.$ck) > 0, 'Checksum is empty' );
+	}
+	
+	public function testCreateChecksumMD5() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$ck = new Checksum( 'MD5' );
+		$id = $this->esu->createObject( null, null, 'hello', 'text/plain', $ck );
+		$this->cleanup[] = $id;
+		PHPUnit_Framework_Assert::assertTrue( strlen(''.$ck) > 0, 'Checksum is empty' );
+	}
+	
 	/**
 	 * Tests reading back a checksum.  Note that for this test to operate fully, you
 	 * should create a policy that creates an erasure coded replica for objects with
@@ -1085,7 +1303,7 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 		
 		// update the object contents
 		$tempFile = tmpfile();
-		for( $i = 0; $i<200000; $i++ ) {
+		for( $i = 0; $i<19999; $i++ ) {
 			fprintf( $tempFile, 'hellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohello\n' );
 		}
 		fseek( $tempFile, 0 );
@@ -1155,10 +1373,10 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 
 		// Attempt overwrite
 		$id = $this->esu->createObjectOnPath($op3, null, null, 'Four score and seven years ago', 'text/plain');
-		PHPUnit_Framework_Assert::assertNotNull(id, 'null ID returned');
+		PHPUnit_Framework_Assert::assertNotNull($id, 'null ID returned');
 		$this->cleanup[] = $id;
 		$id = $this->esu->createObjectOnPath($op4, null, null, "You shouldn't see me", 'text/plain');
-		PHPUnit_Framework_Assert::assertNotNull(id, 'null ID returned');
+		PHPUnit_Framework_Assert::assertNotNull($id, 'null ID returned');
 		$this->cleanup[] = $id;
 		$this->esu->rename($op3, $op4, true);
 
@@ -1194,7 +1412,279 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 			PHPUnit_Framework_Assert::assertTrue( $info->replicas[0]->id != $info->replicas[1]->id, 'Replica IDs equal' );
 		}
 	}
+	
+	public function testCreateAccessToken() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$tokenId = $this->esu->createAccessToken();
+		PHPUnit_Framework_Assert::assertNotNull($tokenId, 'Access token ID was null');
+		$this->esu->deleteAccessToken($tokenId);
+	}
+	
+	public function testCreateAccessTokenWithPolicy() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$policy = new Policy();
+		$now = time();
+		$now += 3600; // 1 hr.
+		$policy->expiration = $now;
+		$policy->maxUploads = 1;
+		$tokenId = $this->esu->createAccessToken($policy);
+		
+		// Read it back.
+		$tokenInfo = $this->esu->getAccessTokenInfo($tokenId);
+		
+		PHPUnit_Framework_Assert::assertEquals($now, $tokenInfo->expiration);
+		PHPUnit_Framework_Assert::assertEquals(1, $tokenInfo->maxUploads);
+		PHPUnit_Framework_Assert::assertEquals($tokenId, $tokenInfo->accessTokenId);
+		
+		$this->esu->deleteAccessToken($tokenId);
+	}
+	
+	public function testCreateDownloadToken() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		// Create an object.
+		$id = $this->esu->createObject( null, null, 'hello', 'text/plain' );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $id;
+		
+		// Create a download token for it
+		$policy = new Policy();
+		$now = time();
+		$now += 3600;
+		$policy->expiration = $now;
+		$policy->maxDownloads = 1;
+		$tokenId = $this->esu->createAccessToken($policy, $id);
+		PHPUnit_Framework_Assert::assertNotNull($tokenId);
+		
+		// Verify the token
+		$tokenInfo = $this->esu->getAccessTokenInfo($tokenId);
+		PHPUnit_Framework_Assert::assertNotNull($tokenInfo);
+		PHPUnit_Framework_Assert::assertEquals($now, $tokenInfo->expiration, 'expiration incorrect');
+		PHPUnit_Framework_Assert::assertEquals($tokenId, $tokenInfo->accessTokenId);
+		PHPUnit_Framework_Assert::assertEquals($id->__toString(), $tokenInfo->objectId);
+		PHPUnit_Framework_Assert::assertEquals(1, $tokenInfo->maxDownloads);
+		PHPUnit_Framework_Assert::assertEquals(0, $tokenInfo->maxUploads);
+		
+		// Download the token
+		$tokenUrl = $this->esu->getAccessTokenUrl($tokenId);
+		$downloadRequest = new HTTP_Request2($tokenUrl);
+		$downloadResponse = $downloadRequest->send();
+		$body = $downloadResponse->getBody();
+		PHPUnit_Framework_Assert::assertEquals('hello', $body);
+		
+	}
 
+	public function testCreateDownloadTokenForPath() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		// Create a namespace object.
+		$path = new ObjectPath( '/' . $this->random8() );
+		
+		$id = $this->esu->createObjectOnPath( $path, null, null, 'hello', 'text/plain' );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $path;
+			
+		// Create a download token for it
+		$policy = new Policy();
+		$now = time();
+		$now += 3600;
+		$policy->expiration = $now;
+		$policy->maxDownloads = 1;
+		$tokenId = $this->esu->createAccessToken($policy, $path);
+		PHPUnit_Framework_Assert::assertNotNull($tokenId);
+	
+		// Verify the token
+		$tokenInfo = $this->esu->getAccessTokenInfo($tokenId);
+		PHPUnit_Framework_Assert::assertNotNull($tokenInfo);
+		PHPUnit_Framework_Assert::assertEquals($now, $tokenInfo->expiration, 'expiration incorrect');
+		PHPUnit_Framework_Assert::assertEquals($tokenId, $tokenInfo->accessTokenId);
+		PHPUnit_Framework_Assert::assertEquals($path->__toString(), $tokenInfo->path);
+		PHPUnit_Framework_Assert::assertEquals(1, $tokenInfo->maxDownloads);
+		PHPUnit_Framework_Assert::assertEquals(0, $tokenInfo->maxUploads);
+	
+		// Download the token
+		$tokenUrl = $this->esu->getAccessTokenUrl($tokenId);
+		$downloadRequest = new HTTP_Request2($tokenUrl);
+		$downloadResponse = $downloadRequest->send();
+		$body = $downloadResponse->getBody();
+		PHPUnit_Framework_Assert::assertEquals('hello', $body);
+	
+	}
+	
+	/**
+	 * Test creating an object with content in a keypool
+	 */
+	public function testCreateObjectWithContentInKeypool() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$kp = new Keypool($this->TEST_KEYPOOL, $this->randomKey());
+	
+		$id = $this->esu->createObjectInKeypool( $kp, null, null, 'hello', 'text/plain' );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $kp;
+	
+		// Read back the content
+		$content = $this->esu->readObject( $id );
+		PHPUnit_Framework_Assert::assertEquals( 'hello', $content, 'object content wrong using id' );
+	
+		$content = $this->esu->readObject( $kp );
+		PHPUnit_Framework_Assert::assertEquals( 'hello', $content, 'object content wrong using path' );
+	}
+	
+	/**
+	 * Test listing the system metadata on an object
+	 */
+	public function testGetSystemMetadataInKeypool() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$kp = new Keypool($this->TEST_KEYPOOL, $this->randomKey());
+		
+		// Create an object
+		$mlist = new MetadataList();
+		$listable = new Metadata( 'listable', 'foo', true );
+		$unlistable = new Metadata( 'unlistable', 'bar', false );
+		$listable2 = new Metadata( 'listable2', 'foo2 foo2', true );
+		$unlistable2 = new Metadata( 'unlistable2', 'bar2 bar2', false );
+		$mlist->addMetadata( $listable );
+		$mlist->addMetadata( $unlistable );
+		$mlist->addMetadata( $listable2 );
+		$mlist->addMetadata( $unlistable2 );
+		$id = $this->esu->createObjectInKeypool($kp, null, $mlist, null, null );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $kp;
+	
+		// Read only part of the metadata
+		$mtags = new MetadataTags();
+		$mtags->addTag( new MetadataTag( 'atime', false ) );
+		$mtags->addTag( new MetadataTag( 'ctime', false ) );
+		$meta = $this->esu->getSystemMetadata( $kp, $mtags );
+		PHPUnit_Framework_Assert::assertNotNull( 'foo', $meta->getMetadata( 'atime' ), "value of 'atime' missing" );
+		PHPUnit_Framework_Assert::assertNull( $meta->getMetadata( 'mtime' ), "value of 'mtime' should not have been returned" );
+		PHPUnit_Framework_Assert::assertNotNull( 'bar', $meta->getMetadata( 'ctime' ), "value of 'ctime' missing" );
+		PHPUnit_Framework_Assert::assertNull( $meta->getMetadata( 'gid' ), "value of 'gid' should not have been returned" );
+		PHPUnit_Framework_Assert::assertNull( $meta->getMetadata( 'listable' ), "value of 'listable' should not have been returned" );
+	}
+	
+	/**
+	 * Test reading back user metadata
+	 */
+	public function testGetUserMetadataInKeypool() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$kp = new Keypool($this->TEST_KEYPOOL, $this->randomKey());
+		
+		// Create an object with user metadata
+		$mlist = new MetadataList();
+		$listable = new Metadata( 'listable', 'foo', true );
+		$unlistable = new Metadata( 'unlistable', 'bar', false );
+		$listable2 = new Metadata( 'listable2', 'foo2 foo2', true );
+		$unlistable2 = new Metadata( 'unlistable2', 'bar2 bar2', false );
+		$mlist->addMetadata( $listable );
+		$mlist->addMetadata( $unlistable );
+		$mlist->addMetadata( $listable2 );
+		$mlist->addMetadata( $unlistable2 );
+		$id = $this->esu->createObjectInKeypool($kp, null, $mlist, null, null );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $kp;
+	
+		// Read only part of the metadata
+		$mtags = new MetadataTags();
+		$mtags->addTag( new MetadataTag( 'listable', true ) );
+		$mtags->addTag( new MetadataTag( 'unlistable', false ) );
+		$meta = $this->esu->getUserMetadata( $kp, $mtags );
+		PHPUnit_Framework_Assert::assertEquals( 'foo', $meta->getMetadata( 'listable' )->getValue(), "value of 'listable' wrong" );
+		PHPUnit_Framework_Assert::assertNull( $meta->getMetadata( 'listable2' ), "value of 'listable2' should not have been returned" );
+		PHPUnit_Framework_Assert::assertEquals( 'bar', $meta->getMetadata( 'unlistable' )->getValue(), "value of 'unlistable' wrong" );
+		PHPUnit_Framework_Assert::assertNull( $meta->getMetadata( 'unlistable2' ), "value of 'unlistable2' should not have been returned" );
+	}
+
+	/**
+	 * Test deleting user metadata
+	 */
+	public function testDeleteUserMetadataInKeypool() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		$kp = new Keypool($this->TEST_KEYPOOL, $this->randomKey());
+		
+		// Create an object with metadata
+		$mlist = new MetadataList();
+		$listable = new Metadata( 'listable', 'foo', true );
+		$unlistable = new Metadata( 'unlistable', 'bar', false );
+		$listable2 = new Metadata( 'listable2', 'foo2 foo2', true );
+		$unlistable2 = new Metadata( 'unlistable2', 'bar2 bar2', false );
+		$mlist->addMetadata( $listable );
+		$mlist->addMetadata( $unlistable );
+		$mlist->addMetadata( $listable2 );
+		$mlist->addMetadata( $unlistable2 );
+		$id = $this->esu->createObjectInKeypool($kp, null, $mlist, null, null );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $kp;
+	
+		// Delete a couple of the metadata entries
+		$mtags = new MetadataTags();
+		$mtags->addTag( new MetadataTag( 'listable2', true ) );
+		$mtags->addTag( new MetadataTag( 'unlistable2', false ) );
+		$this->esu->deleteUserMetadata( $kp, $mtags );
+	
+		// Read back the metadata for the object and ensure the deleted
+		// entries don't exist
+		$meta = $this->esu->getUserMetadata( $kp );
+		PHPUnit_Framework_Assert::assertEquals( 'foo', $meta->getMetadata( 'listable' )->getValue(), "value of 'listable' wrong" );
+		PHPUnit_Framework_Assert::assertNull( $meta->getMetadata( 'listable2' ), "metadata 'listable2' should have been deleted" );
+		PHPUnit_Framework_Assert::assertEquals( 'bar', $meta->getMetadata( 'unlistable' )->getValue(), "value of 'unlistable' wrong" );
+				PHPUnit_Framework_Assert::assertNull( $meta->getMetadata( 'unlistable2' ), "metadata 'unlistable2' should have been deleted" );
+	}
+	
+	public function testGetShareableUrlWithPathAndDisposition() {
+		if($this->atmosMajorMinor < 2.1) {
+			$this->markTestSkipped("Requires Atmos >= 2.1.0");
+			return;
+		}
+		
+		// Create an object with content.
+		$path = new ObjectPath( '/' . $this->random8() );
+	
+		$id = $this->esu->createObjectOnPath( $path, null, null, 'Four score and twenty years ago', 'text/plain' );
+		PHPUnit_Framework_Assert::assertNotNull( $id, 'null ID returned' );
+		$this->cleanup[] = $path;
+	
+		// Now + 4 hours
+		$expiration = time() + 3600 * 4;
+		$disposition = 'attachment; filename="foo.txt"';
+		$url = $this->esu->getShareableUrl( $path, $expiration, $disposition );
+	
+		echo 'Sharable URL: ' . $url . "\n";
+	
+		// Read the data back
+		$req = &new HTTP_Request2( $url );
+		$response = $req->send();
+		if( $response->getStatus() > 399 ) {
+			PHPUnit_Framework_Assert::assertTrue( false, 'HTTP status ' . $response->getStatus() );
+		}
+		$content = $response->getBody();
+		echo 'content: ' . $content;
+		PHPUnit_Framework_Assert::assertEquals( 'Four score and twenty years ago', $content, 'object content wrong' );
+		PHPUnit_Framework_assert::assertEquals( $disposition, $response->getHeader('Content-Disposition'));
+	}
+	
 	
 	private function directoryContains( $dirList, $op ) {
 		print 'Looking for: ' . $op . "\n";
@@ -1219,4 +1709,9 @@ class EsuRestApiTest extends PHPUnit_Framework_TestCase {
 	private function random8() {
 		return $this->rand_chars( $this->chars, 8, true );
 	}
+	
+	private function randomKey() {
+		return $this->rand_chars( $this->chars, 32, true );
+	}
+	
 }

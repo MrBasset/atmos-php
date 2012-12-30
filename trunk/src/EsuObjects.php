@@ -131,7 +131,49 @@ class ObjectPath extends Identifier {
 	}
 }
 
-
+/**
+ * Identifier subclass for Atmos 2.1.0+ keypool objects.
+ * @since Atmos 2.1.0
+ */
+class Keypool extends Identifier {
+	private $key;
+	private $pool;
+	
+	/**
+	 * Creates a new Keypool identifier.
+	 * @param string $pool the Atmos pool for the key
+	 * @param string $key the key in the pool.
+	 * @throws EsuException if the arguments are invalid
+	 */
+	public function __construct( $pool, $key ) {
+		// Must be a string
+		if( !is_string( $pool ) ) {
+			throw new EsuException( 'Pool must be a string' );
+		}
+		if( !is_string( $key ) ) {
+			throw new EsuException( 'Key must be a string' );
+		}
+			
+		$this->pool = $pool;
+		$this->key = $key;
+	}
+	
+	/**
+	 * Gets the pool associated with this object.
+	 */
+	public function getPool() {
+		return $this->pool;
+	}
+	
+	/**
+	 * For compatibility with other Identifier classes, the key is returned
+	 * here since that is what is sent on the URL.
+	 */
+	public function __toString() {
+		return $this->key;
+	}
+	
+}
 
 /**
  * Encapsulates a piece of object metadata
@@ -567,7 +609,7 @@ class MetadataTags {
 	 * Gets a metadata tag by name or index.
 	 */
 	public function getTag( $index_or_name ) {
-		if( is_numeric( $index_or_name ) ) {
+		if( is_int( $index_or_name ) ) {
 			// Search by index
 			if ( isset( $this->byindex[$index_or_name] ) )
 				return $this->byindex[$index_or_name];
@@ -818,6 +860,52 @@ class ServiceInformation {
 	}
 }
 
+/**
+ * Wraps the built-in digest methods into a class compatible with the SHA0 we
+ * use.  Requires PHP 5.1.2+
+ */
+class DigestWrapper {
+	private $hash;
+	private $value;
+	
+	/**
+	 * Constructs a new DigestWrapper with the given algorithm.
+	 * @param string $algorithm the algorithm name, e.g. 'MD5' or 'SHA1'
+	 */
+	public function __construct($algorithm) {
+		$this->hash = hash_init($algorithm); 
+	}
+	
+	public function __clone() {
+		// copy the hash so we dont tamper with the original (e.g. hash_final
+		// will pad and corrupt it if we get the value of it.)
+		$this->hash = hash_copy($this->hash);
+	}
+	
+	/**
+	 * Updates the value of the hash.
+	 * @param string $data the data to append to the hash.
+	 */
+	public function hash_update($data) {
+		hash_update($this->hash, $data);
+	}
+	
+	/**
+	 * Pads and computes the final value of the hash.
+	 */
+	public function hash_final() {
+		$this->value = hash_final($this->hash, True);
+	}
+	
+	/**
+	 * Returns the value of the hash.  You must call hash_final first.
+	 * @return string a raw binary string containing the hash value.
+	 */
+	public function getValue() {
+		return $this->value;
+	}
+}
+
 
 class Checksum {
 	private $digest;
@@ -825,10 +913,23 @@ class Checksum {
 	private $offset;
 	private $expected_value;
 	
+	/**
+	 * Creates a new checksum object.
+	 * @param string $algorithm  The checksumming algorithm to use.  For Atmos
+	 * 1.4+ and 2.0+, this can be 'SHA0'.  For Atmos 2.1.0+, this also can be
+	 * either 'SHA1' or 'MD5'.
+	 */
 	public function __construct( $algorithm ) {
-		// For now, we only support SHA0
-		$this->digest = new SHA0();
-		$this->algorithm = 'SHA0';
+		if($algorithm == 'SHA0') {
+			$this->digest = new SHA0();
+		} else if($algorithm == 'SHA1') {
+			$this->digest = new DigestWrapper('SHA1');
+		} else if($algorithm == 'MD5') {
+			$this->digest = new DigestWrapper('MD5');
+		} else {
+			throw new EsuException("Unsupported algorithm: $algorithm");
+		}
+		$this->algorithm = $algorithm;
 		$this->offset = '0';
 		$this->expected_value = null;
 	}
@@ -878,7 +979,7 @@ class Checksum {
 	 * Gets the current value of the hash.  Clones the existing hash and performs
 	 * a final operation on it so the current partial hash is not finalized.
 	 */
-	private function getHashValue() {
+	public function getHashValue() {
 		$tmpdigest = clone $this->digest;
 		$tmpdigest->hash_final();
 		return $this->strhex( $tmpdigest->getValue() );

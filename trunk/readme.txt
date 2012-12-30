@@ -11,7 +11,7 @@ and downloading object content from the cloud.
 Requirements
 ------------
  * PHP 5+
- * HTTP_Request (available from PEAR)
+ * HTTP_Request2 (available from PEAR)
  * phpunit (optional for running unit tests, available from 
             http://www.phpunit.de)
  * dom (built-in)
